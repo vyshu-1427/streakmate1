@@ -69,7 +69,7 @@ function Dashboard() {
       if (!token) {
         throw new Error('Please log in to access the dashboard');
       }
-      const response = await fetch('http://localhost:5003/api/auth/me', {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/auth/me` ,{
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
@@ -113,7 +113,7 @@ function Dashboard() {
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
-      const res = await fetch('http://localhost:5003/api/motivation/history', {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/motivation/history`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -131,7 +131,7 @@ function Dashboard() {
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
-      const response = await fetch('http://localhost:5003/api/streak-restore/chances', {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/streak-restore/chances`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
@@ -165,7 +165,7 @@ function Dashboard() {
   // Handler for AI motivation response
   const handleMotivation = async (habitId, habitName, reason) => {
     const token = localStorage.getItem('token');
-    const res = await fetch('http://localhost:5003/api/motivation/missed', {
+    const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/motivation/missed`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

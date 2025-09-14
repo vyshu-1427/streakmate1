@@ -16,7 +16,7 @@ const Login = () => {
     setError("");
 
     try {
-      const res = await axios.post("http://localhost:5003/api/auth/login", form);
+      const res = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/auth/login`, form);
       localStorage.setItem("token", res.data.token);
       console.log(res);
       setTimeout(() => {

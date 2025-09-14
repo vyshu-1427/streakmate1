@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import axios from "axios";
 
-axios.defaults.baseURL = "http://localhost:5003";
+// axios.defaults.baseURL = "http://localhost:5003";
 
 const setAuthTokenHeader = (token) => {
   if (token) {
@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
   const fetchUser = useCallback(async () => {
     try {
       console.log("Fetching user from /api/auth/me");
-      const response = await axios.get("/api/auth/me");
+      const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/auth/me`);
       console.log("fetchUser response:", response.data);
       setUser(response.data);
       setIsAuthenticated(true);
