@@ -14,17 +14,20 @@ const app = express();
 // Middleware
 app.use(express.json());
 
-// CORS configuration for frontend
-app.use(
-  cors({
-    origin: 'https://streakmate.vercel.app', // your deployed frontend
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    credentials: true, // if you use cookies or authentication
-  })
-);
+// CORS configuration
+const allowedOrigin = 'https://streakmate.vercel.app';
+app.use(cors({
+  origin: allowedOrigin,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+}));
 
-// Handle preflight OPTIONS requests for all routes
-app.options('*', cors());
+// Handle preflight requests without redirect
+app.options('*', cors({
+  origin: allowedOrigin,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+}));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -32,7 +35,7 @@ app.use('/api/habits', habitRoutes);
 app.use('/api/motivation', motivationRoutes);
 app.use('/api/streak-restore', streakRoutes);
 
-// Connect to MongoDB
+// MongoDB connection
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
@@ -42,9 +45,7 @@ mongoose
   .catch((err) => console.error('MongoDB Connection Failed:', err));
 
 // Health check route
-app.get('/', (req, res) => {
-  res.send('API is running');
-});
+app.get('/', (req, res) => res.send('API is running'));
 
 // Start server
 const PORT = process.env.PORT || 5003;
