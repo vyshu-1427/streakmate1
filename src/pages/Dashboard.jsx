@@ -11,36 +11,37 @@ import MissedStreakModal from '../components/MissedStreakModal';
 import HabitGraph from '../components/HabitGraph';
 
 
-const StatsCard = ({ title, value, icon, color }) => (
+const StatsCard = ({ title, value, icon, color, gradient }) => (
   <motion.div
-    className={`rounded-xl p-4 bg-white border shadow-soft ${color} flex items-center gap-3 hover:bg-neutral-50 transition-colors`}
-    whileHover={{ scale: 1.02 }}
-    transition={{ duration: 0.2 }}
+    className={`rounded-2xl p-6 bg-gradient-to-br ${gradient} border border-white/20 shadow-2xl backdrop-blur-lg flex items-center gap-4 hover:shadow-3xl transition-all duration-300 relative overflow-hidden`}
+    whileHover={{ scale: 1.05, y: -5 }}
+    transition={{ duration: 0.3 }}
   >
-    <div className="rounded-lg p-2 bg-neutral-50">{icon}</div>
+    <div className={`rounded-xl p-3 bg-white/20 backdrop-blur-sm text-white shadow-lg`}>{icon}</div>
     <div>
-      <p className="text-neutral-500 text-xs font-medium uppercase tracking-wide">{title}</p>
-      <p className="text-xl font-bold text-neutral-900">{value}</p>
+      <p className="text-white/80 text-xs font-semibold uppercase tracking-wider mb-1">{title}</p>
+      <p className="text-2xl font-extrabold text-white">{value}</p>
     </div>
+    <div className="absolute -bottom-2 -right-2 w-16 h-16 bg-gradient-to-br from-current/10 to-transparent rounded-full"></div>
   </motion.div>
 );
 
 const DateButton = ({ date, isToday, isSelected, onClick }) => (
   <motion.button
     onClick={onClick}
-    className={`flex flex-col items-center justify-center p-2 rounded-lg min-w-[3.5rem] transition-all font-semibold border ${
+    className={`flex flex-col items-center justify-center p-4 rounded-2xl min-w-[4rem] transition-all font-semibold border-2 backdrop-blur-sm ${
       isSelected
-        ? 'bg-primary-600 text-white border-primary-600'
+        ? 'bg-gradient-to-br from-purple-600 to-pink-600 text-white border-purple-600 shadow-xl'
         : isToday
-        ? 'bg-primary-100 text-primary-700 border-primary-200'
-        : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
+        ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-white border-yellow-400 shadow-lg'
+        : 'bg-white/80 text-neutral-700 border-neutral-200 hover:bg-white hover:border-purple-300 hover:shadow-lg'
     }`}
-    whileHover={{ scale: 1.05 }}
+    whileHover={{ scale: 1.08, y: -2 }}
     whileTap={{ scale: 0.95 }}
     aria-label={`Select ${format(date, 'EEEE, MMMM d')}`}
   >
-    <span className="text-xs uppercase tracking-wide">{format(date, 'EEE')}</span>
-    <span className="text-base font-bold">{format(date, 'd')}</span>
+    <span className="text-xs uppercase tracking-wider font-bold">{format(date, 'EEE')}</span>
+    <span className="text-lg font-extrabold">{format(date, 'd')}</span>
   </motion.button>
 );
 
@@ -208,7 +209,7 @@ function Dashboard() {
     async (habitData) => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:5003/api/habits', {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/habits`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -260,8 +261,144 @@ function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50 pt-16 pb-8">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen relative overflow-hidden pt-16 pb-8" style={{
+      backgroundImage: 'url(/bg.jpg)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed'
+    }}>
+      {/* Gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/90 via-purple-50/85 to-pink-50/90"></div>
+
+      {/* 3D Animated background elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Large floating orbs */}
+        <motion.div
+          className="absolute top-20 left-10 w-72 h-72 bg-gradient-to-r from-blue-400/20 to-purple-500/20 rounded-full blur-3xl"
+          animate={{
+            scale: [1, 1.1, 1],
+            x: [0, 50, 0],
+            rotateY: [0, 180, 360],
+          }}
+          transition={{
+            duration: 15,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          style={{ transformStyle: 'preserve-3d' }}
+        />
+        <motion.div
+          className="absolute bottom-20 right-10 w-96 h-96 bg-gradient-to-r from-pink-400/15 to-yellow-400/15 rounded-full blur-3xl"
+          animate={{
+            scale: [1.1, 1, 1.1],
+            y: [0, -30, 0],
+            rotateX: [0, 180, 360],
+          }}
+          transition={{
+            duration: 20,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          style={{ transformStyle: 'preserve-3d' }}
+        />
+
+        {/* Geometric shapes */}
+        <motion.div
+          className="absolute top-1/3 right-1/4 w-32 h-32 bg-gradient-to-br from-cyan-300/30 to-blue-400/30 transform rotate-45"
+          animate={{
+            rotate: [45, 135, 45],
+            scale: [1, 1.2, 1],
+          }}
+          transition={{
+            duration: 12,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          style={{ transformStyle: 'preserve-3d' }}
+        />
+        <motion.div
+          className="absolute bottom-1/3 left-1/3 w-24 h-24 bg-gradient-to-br from-yellow-300/25 to-orange-400/25 rounded-lg"
+          animate={{
+            rotateY: [0, 360],
+            scale: [1, 1.3, 1],
+          }}
+          transition={{
+            duration: 18,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          style={{ transformStyle: 'preserve-3d' }}
+        />
+
+        {/* Floating particles */}
+        <motion.div
+          className="absolute top-1/4 left-1/2 w-4 h-4 bg-white/40 rounded-full"
+          animate={{
+            y: [0, -100, 0],
+            opacity: [0.4, 1, 0.4],
+          }}
+          transition={{
+            duration: 8,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute top-3/4 right-1/3 w-6 h-6 bg-purple-300/30 rounded-full"
+          animate={{
+            y: [0, -80, 0],
+            x: [0, 20, 0],
+            opacity: [0.3, 0.8, 0.3],
+          }}
+          transition={{
+            duration: 10,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute bottom-1/4 left-1/4 w-3 h-3 bg-pink-300/40 rounded-full"
+          animate={{
+            y: [0, -60, 0],
+            opacity: [0.4, 1, 0.4],
+          }}
+          transition={{
+            duration: 6,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+
+        {/* 3D cubes */}
+        <motion.div
+          className="absolute top-1/2 right-1/6 w-16 h-16 bg-gradient-to-br from-indigo-400/20 to-purple-500/20 transform rotateX-15 rotateY-15"
+          animate={{
+            rotateX: [15, 75, 15],
+            rotateY: [15, 75, 15],
+          }}
+          transition={{
+            duration: 14,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          style={{ transformStyle: 'preserve-3d' }}
+        />
+        <motion.div
+          className="absolute bottom-1/2 left-1/6 w-20 h-20 bg-gradient-to-br from-emerald-400/15 to-teal-500/15 transform rotateX-30 rotateY-30"
+          animate={{
+            rotateX: [30, 90, 30],
+            rotateY: [30, 90, 30],
+          }}
+          transition={{
+            duration: 16,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          style={{ transformStyle: 'preserve-3d' }}
+        />
+      </div>
+
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
   {/* NOTE: Latest motivation is now displayed near the Missed Streak / Habits section */}
         {/* Header */}
         <motion.div
@@ -282,7 +419,7 @@ function Dashboard() {
             <NotificationsDropdown notifications={notifications} onClear={() => { setNotifications([]); localStorage.removeItem('sm_notifications'); }} />
             <button
               onClick={handleLogout}
-              className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 flex items-center gap-2"
+              className="bg-primary-600 text-white px-6 py-3 rounded-xl hover:bg-primary-700 flex items-center gap-2 font-bold text-base shadow-xl"
               aria-label="Logout"
             >
               <LogOut size={18} />
@@ -301,32 +438,37 @@ function Dashboard() {
           <StatsCard
             title="Today's Progress"
             value={habits.length > 0 ? `${completedToday}/${habits.length}` : '0/0'}
-            icon={<ListChecks size={20} className="text-primary-500" />}
+            icon={<ListChecks size={24} />}
             color="border-primary-100"
+            gradient="bg-gradient-to-br from-blue-500 to-purple-600"
           />
           <StatsCard
             title="Current Streak"
             value={`${streakCount} days`}
-            icon={<Flame size={20} className="text-secondary-500" />}
+            icon={<Flame size={24} />}
             color="border-secondary-100"
+            gradient="bg-gradient-to-br from-orange-500 to-red-600"
           />
           <StatsCard
             title="Longest Streak"
             value={`${longestStreak} days`}
-            icon={<Trophy size={20} className="text-cyan-500" />}
+            icon={<Trophy size={24} />}
             color="border-cyan-100"
+            gradient="bg-gradient-to-br from-yellow-500 to-orange-600"
           />
           <StatsCard
             title="Restore Chances"
             value={`${restoreChances}/5`}
-            icon={<RotateCcw size={20} className="text-amber-500" />}
+            icon={<RotateCcw size={24} />}
             color="border-amber-100"
+            gradient="bg-gradient-to-br from-amber-500 to-yellow-600"
           />
           <StatsCard
             title="Active Habits"
             value={habits.length}
-            icon={<Clock size={20} className="text-emerald-500" />}
+            icon={<Clock size={24} />}
             color="border-emerald-100"
+            gradient="bg-gradient-to-br from-green-500 to-emerald-600"
           />
         </motion.div>
 

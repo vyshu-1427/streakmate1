@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext'; // Update to './context/useAuth' if refactored
 import './App.css';
 import LandingPage from './pages/LandingPage';
@@ -11,10 +11,16 @@ import HabitCircles from './pages/HabitCircles';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
+import Chatbot from './pages/Chatbot';
 
 
 function App() {
   console.log('App.jsx: Rendering Routes');
+  const location = useLocation();
+
+  // hide chatbot on login & signup pages
+  const hideChatbot = ["/login", "/signup"].includes(location.pathname);
+
   return (
     <>
     <Routes>
@@ -33,6 +39,9 @@ function App() {
       {/* 404 Route */}
       <Route path="*" element={<NotFound />} />
     </Routes>
+
+    {/* Only show chatbot if not on login/signup */}
+    {!hideChatbot && <Chatbot />}
     </>
   );
 }

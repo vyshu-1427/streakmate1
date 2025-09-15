@@ -1,0 +1,3 @@
+- [ ] Modify backend/server.js to allow CORS from 'http://localhost:5173' in addition to 'https://streakmate.vercel.app'
+- [ ] Restart the backend server
+- [ ] Test authentication functionality

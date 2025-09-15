@@ -23,7 +23,7 @@ const useHabits = () => {
       }
 
       console.log('useHabits: Fetching habits from /api/habits');
-      const response = await fetch('http://localhost:5003/api/habits', {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/habits`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -153,7 +153,7 @@ const useHabits = () => {
           try {
             const token = localStorage.getItem('token');
             if (token) {
-              fetch('http://localhost:5003/api/notifications', {
+              fetch(`${import.meta.env.VITE_BACKEND_URL/api/notifications}` , {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify(detail),
@@ -192,7 +192,7 @@ const useHabits = () => {
     console.log(`useHabits: Attempting to complete habit with id: ${id} for date: ${date}`);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5003/api/habits/${id}/complete`, {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/habits/${id}/complete`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -217,7 +217,7 @@ const useHabits = () => {
     // console.log(`useHabits: Attempting to delete habit with id: ${id}`);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5003/api/habits/${id}`, {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/${id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,

@@ -20,10 +20,8 @@ const Login = () => {
       localStorage.setItem("token", res.data.token);
       console.log(res);
       setTimeout(() => {
-        
         navigate("/dashboard");
       }, 500);
-      navigate("/dashboard");
     } catch (err) {
       setError(err.response?.data?.message || "Login failed");
     }

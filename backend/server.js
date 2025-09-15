@@ -6,6 +6,7 @@ import authRoutes from './routes/authRoutes.js';
 import habitRoutes from './routes/habitRoutes.js';
 import motivationRoutes from './routes/motivationRoutes.js';
 import streakRoutes from './routes/streakRoutes.js';
+import chatbotRoutes from './routes/chatbotRoutes.js';
 
 dotenv.config();
 
@@ -15,16 +16,31 @@ const app = express();
 app.use(express.json());
 
 // CORS configuration
-const allowedOrigin = 'https://streakmate.vercel.app';
+const allowedOrigins = ['https://streakmate.vercel.app', 'http://localhost:5173'];
 app.use(cors({
-  origin: allowedOrigin,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
 }));
 
 // Handle preflight requests without redirect
 app.options('*', cors({
-  origin: allowedOrigin,
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
 }));
@@ -34,6 +50,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/habits', habitRoutes);
 app.use('/api/motivation', motivationRoutes);
 app.use('/api/streak-restore', streakRoutes);
+app.use('/api/chatbot', chatbotRoutes);
 
 // MongoDB connection
 mongoose

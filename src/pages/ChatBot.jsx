@@ -1,149 +1,205 @@
-import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { MessageCircle, X } from "lucide-react";
+import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MessageCircle, Send, X, Bot } from 'lucide-react';
 
-function Chatbot() {
-  const [open, setOpen] = useState(false);
+const Chatbot = () => {
+  const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hi! 🌸 I’m your AI StreakBuddy. How are you feeling today?" },
+    {
+      id: 1,
+      text: "Hi! I'm StreakBuddy 🤖, your AI friend here to help you stay motivated with your habits! How are you feeling today?",
+      sender: 'bot',
+      timestamp: new Date()
+    }
   ]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const chatEndRef = useRef(null);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef(null);
 
-  const sendMessage = async () => {
-    if (!input.trim()) return;
-    const userMessage = { role: "user", content: input };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setLoading(true);
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isLoading) return;
+
+    const userMessage = {
+      id: messages.length + 1,
+      text: inputMessage,
+      sender: 'user',
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setIsLoading(true);
+
     try {
-      const res = await fetch("http://localhost:5003/api/chatbot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: input }),
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/chatbot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        body: JSON.stringify({ message: inputMessage })
       });
-      const data = await res.json();
-      const cleanReply = data.reply.replace(/\*/g, ""); // remove any markdown stars
-      setMessages((prev) => [...prev, { role: "assistant", content: cleanReply }]);
-    } catch {
-      setMessages((prev) => [...prev, { role: "assistant", content: "⚠️ Something went wrong." }]);
+
+      const data = await response.json();
+
+      if (data.success) {
+        const botMessage = {
+          id: messages.length + 2,
+          text: data.reply,
+          sender: 'bot',
+          timestamp: new Date(),
+          emotion: data.emotion
+        };
+        setMessages(prev => [...prev, botMessage]);
+      } else {
+        const errorMessage = {
+          id: messages.length + 2,
+          text: "Sorry, I'm having trouble connecting right now. Please try again later!",
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      }
+    } catch (error) {
+      console.error('Chatbot error:', error);
+      const errorMessage = {
+        id: messages.length + 2,
+        text: "Oops! Something went wrong. Please try again!",
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleKeyDown = (e) => e.key === "Enter" && sendMessage();
-
-  useEffect(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), [messages]);
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end">
+    <>
+      {/* Chatbot Toggle Button */}
+      <motion.button
+        onClick={() => setIsOpen(!isOpen)}
+        className="fixed bottom-6 right-6 bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 z-50"
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ type: "spring", stiffness: 260, damping: 20 }}
+      >
+        {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
+      </motion.button>
+
       {/* Chat Window */}
       <AnimatePresence>
-        {open && (
+        {isOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.8, y: 50 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 50 }}
-            transition={{ duration: 0.25 }}
-            className="w-80 sm:w-96 h-[500px] bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col"
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-24 right-6 w-80 h-96 bg-white rounded-2xl shadow-2xl border border-gray-200 z-40 flex flex-col overflow-hidden"
           >
             {/* Header */}
-            <div className="flex items-center justify-between bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-4 py-3">
-              <span className="font-semibold">🌸 StreakBuddy</span>
-              <button
-                onClick={() => setOpen(false)}
-                className="hover:bg-white/20 p-1 rounded-full transition"
-              >
-                <X size={20} />
-              </button>
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex items-center gap-3">
+              <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                <Bot size={16} />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">StreakBuddy</h3>
+                <p className="text-xs opacity-90">Your AI Habit Coach</p>
+              </div>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 min-h-0 p-4 overflow-y-auto flex flex-col gap-3 bg-gradient-to-br from-blue-50 via-purple-50 to-green-50">
-              <AnimatePresence>
-                {messages.map((msg, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className={`max-w-[75%] px-3 py-2 text-sm rounded-2xl shadow-md ${
-                      msg.role === "user"
-                        ? "self-end bg-gradient-to-tr from-purple-500 to-indigo-500 text-white"
-                        : "self-start bg-white border border-gray-200 text-gray-800"
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {messages.map((message) => (
+                <motion.div
+                  key={message.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+                      message.sender === 'user'
+                        ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
+                        : 'bg-gray-100 text-gray-800'
                     }`}
                   >
-                    {msg.content}
-                  </motion.div>
-                ))}
-                {loading && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="self-start flex items-center gap-2 text-gray-500"
-                  >
-                    <span>StreakBuddy is typing</span>
-                    <span className="flex gap-1">
-                      <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></span>
-                      <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-150"></span>
-                      <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-300"></span>
-                    </span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              <div ref={chatEndRef} />
+                    {message.text}
+                    {message.emotion && (
+                      <div className="text-xs opacity-70 mt-1">
+                        Feeling: {message.emotion}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+
+              {/* Loading indicator */}
+              {isLoading && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex justify-start"
+                >
+                  <div className="bg-gray-100 p-3 rounded-2xl">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Input */}
-            <div className="p-3 flex gap-2 border-t border-gray-200 bg-white/80 backdrop-blur-md">
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type your message..."
-                className="flex-1 rounded-full px-4 py-2 bg-white border border-gray-300 outline-none placeholder-gray-500 focus:ring-2 focus:ring-purple-400 transition text-sm"
-              />
-              <button
-                onClick={sendMessage}
-                className="px-4 py-2 rounded-full bg-purple-600 text-white font-medium shadow-md hover:bg-purple-700 transition text-sm"
-              >
-                Send
-              </button>
+            <div className="p-4 border-t border-gray-200">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Type your message..."
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={isLoading}
+                />
+                <motion.button
+                  onClick={handleSendMessage}
+                  disabled={!inputMessage.trim() || isLoading}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-2 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Send size={16} />
+                </motion.button>
+              </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Floating Button with Tooltip */}
-      {!open && (
-        <div className="relative group">
-          <button
-            onClick={() => setOpen(true)}
-            className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-full shadow-lg flex items-center gap-2 transition"
-          >
-            <MessageCircle size={26} />
-          </button>
-          <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 whitespace-nowrap bg-black/80 text-white text-xs px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition">
-            Hey, your StreakBuddy is here 💜
-          </span>
-        </div>
-      )}
-
-      {/* Styles */}
-      <style>
-        {`
-          @keyframes bounce {0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); }}
-          .animate-bounce { animation: bounce 0.6s infinite; }
-          .delay-150 { animation-delay: 0.15s; }
-          .delay-300 { animation-delay: 0.3s; }
-        `}
-      </style>
-    </div>
+    </>
   );
-}
+};
 
 export default Chatbot;
