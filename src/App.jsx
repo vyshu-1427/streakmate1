@@ -11,7 +11,7 @@ import HabitCircles from './pages/HabitCircles';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
-import Chatbot from './pages/Chatbot';
+import Chatbot from './pages/Chatbot.jsx';
 
 
 function App() {
