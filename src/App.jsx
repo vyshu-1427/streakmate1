@@ -9,9 +9,9 @@ import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import HabitCircles from './pages/HabitCircles';
 import NotFound from './pages/NotFound';
+import Chatbot from './pages/Chatbot.jsx';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
-import Chatbot from './pages/Chatbot.jsx';
 
 
 function App() {
