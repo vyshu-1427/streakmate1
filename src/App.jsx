@@ -9,7 +9,7 @@ import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import HabitCircles from './pages/HabitCircles';
 import NotFound from './pages/NotFound';
-import Chatbot from './pages/Chatbot.jsx';
+import Chatbot from './pages/Chatbot';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 
@@ -32,10 +32,10 @@ function App() {
 
       {/* Protected Routes */}
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/circles" element={<ProtectedRoute><HabitCircles /></ProtectedRoute>} />
-      </Route>
+      <Route path="/dashboard" element={<Dashboard />} />  
+      <Route path="/profile" element={<Profile />} />
+      <Route path="/circles" element={<HabitCircles />} />
+    </Route>
       {/* 404 Route */}
       <Route path="*" element={<NotFound />} />
     </Routes>
