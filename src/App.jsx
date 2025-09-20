@@ -9,7 +9,8 @@ import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import HabitCircles from './pages/HabitCircles';
 import NotFound from './pages/NotFound';
-import Chatbot from './pages/Chatbot';
+// import Chatbot from './pages/Chatbot';
+import ChatBot from './pages/ChatBot';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 
@@ -41,7 +42,7 @@ function App() {
     </Routes>
 
     {/* Only show chatbot if not on login/signup */}
-    {!hideChatbot && <Chatbot />}
+    {!hideChatbot && <ChatBot />}
     </>
   );
 }

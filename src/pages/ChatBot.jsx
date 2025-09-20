@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle, Send, X, Bot } from 'lucide-react';
 
-const Chatbot = () => {
+const ChatBot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
@@ -143,11 +143,11 @@ const Chatbot = () => {
                     }`}
                   >
                     {message.text}
-                    {message.emotion && (
+                    {/* {message.emotion && (
                       <div className="text-xs opacity-70 mt-1">
                         Feeling: {message.emotion}
                       </div>
-                    )}
+                    )} */}
                   </div>
                 </motion.div>
               ))}
@@ -202,4 +202,4 @@ const Chatbot = () => {
   );
 };
 
-export default Chatbot;
+export default ChatBot;
