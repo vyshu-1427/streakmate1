@@ -41,6 +41,11 @@ const signup = async (req, res) => {
 const login = async (req, res) => {
   const { email, password } = req.body;
   try {
+    if (!process.env.JWT_SECRET) {
+      console.error("JWT_SECRET is not set");
+      return res.status(500).json({ success: false, message: "Server configuration error" });
+    }
+
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({
@@ -66,14 +71,16 @@ const login = async (req, res) => {
       token,
       user: { name: user.name, email },
     });
-    console.log("User loggged in successfully");
+    console.log("User logged in successfully");
   } catch (err) {
+    console.error("Login error:", err);  // <-- log real error
     res.status(500).json({
       success: false,
       message: 'Internal server error',
     });
   }
 };
+
 
 const getDashboard = (req, res) => {
   res.json({
