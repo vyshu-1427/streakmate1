@@ -1,22 +1,21 @@
 // AuthContext.jsx
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";  // <-- import
 import axios from "axios";
-
-// axios.defaults.baseURL = "http://localhost:5003";
 
 const setAuthTokenHeader = (token) => {
   if (token) {
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    console.log("Axios default header set with token:", token);
   } else {
     delete axios.defaults.headers.common['Authorization'];
-    console.log("Axios default header removed");
   }
 };
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
+  const navigate = useNavigate();  // <-- get navigate
+
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -24,15 +23,12 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUser = useCallback(async () => {
     try {
-      console.log("Fetching user from /api/auth/me");
       const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/auth/me`);
-      console.log("fetchUser response:", response.data);
-      setUser(response.data);
+      setUser(response.data.user);  // make sure you access user object
       setIsAuthenticated(true);
       setError(null);
       return true;
     } catch (err) {
-      console.error("Auth error during fetchUser:", err.response?.data || err.message);
       setUser(null);
       setIsAuthenticated(false);
       setAuthTokenHeader(null);
@@ -46,28 +42,29 @@ export const AuthProvider = ({ children }) => {
 
   const login = useCallback(async (token) => {
     if (token) {
-      console.log("Login: Setting token and fetching user");
       localStorage.setItem("token", token);
       setAuthTokenHeader(token);
       const success = await fetchUser();
+      if (success) {
+        navigate("/dashboard");  // <-- redirect on successful login
+      }
       return success;
     }
     setError("No token provided");
     return false;
-  }, [fetchUser]);
+  }, [fetchUser, navigate]);
 
   const logout = useCallback(() => {
-    console.log("Logging out");
     localStorage.removeItem("token");
     setAuthTokenHeader(null);
     setUser(null);
     setIsAuthenticated(false);
     setError(null);
-  }, []);
+    navigate("/login");  // optional: redirect to login on logout
+  }, [navigate]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    console.log("Initial load: Token found:", !!token);
     if (token) {
       setAuthTokenHeader(token);
       fetchUser();
@@ -93,5 +90,4 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// Named export for useAuth
 export const useAuth = () => useContext(AuthContext);
