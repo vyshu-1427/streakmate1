@@ -5,7 +5,7 @@ const iconOptions = [
   { icon: '💪', label: 'Gym', value: '💪' },
   { icon: '📚', label: 'Study', value: '📚' },
   { icon: '🧘', label: 'Meditation', value: '🧘' },
--  { icon: '☕', label: 'Coffee', value: '☕' },
+  { icon: '☕', label: 'Coffee', value: '☕' },
   { icon: '📝', label: 'Notes', value: '📝' },
   { icon: '🧠', label: 'Focus', value: '🧠' },
 ];
@@ -38,8 +38,8 @@ const AddHabitModal = ({ open, onClose, onAdd }) => {
       name: habitData.name,
       description: habitData.description,
       frequency: habitData.frequency,
-  timeFrom: habitData.timeFrom,
-  timeTo: habitData.timeTo,
+      timeFrom: habitData.timeFrom,
+      timeTo: habitData.timeTo,
       icon: habitData.icon || '💪',
       emoji: habitData.emoji || '💪',
       streak: 0,
@@ -74,7 +74,8 @@ const AddHabitModal = ({ open, onClose, onAdd }) => {
         frequency: 'daily',
         timeFrom: '',
         timeTo: '',
-        icon: iconOptions[0],
+        icon: iconOptions[0].icon,
+        emoji: iconOptions[0].value,
       });
       setTimeError('');
       onClose();
@@ -130,28 +131,31 @@ const AddHabitModal = ({ open, onClose, onAdd }) => {
             ))}
           </div>
 
-          <div className="flex gap-4">
-            <input
-              type="time"
-              name="timeFrom"
-              placeholder="Start time"
-              value={habitData.timeFrom}
-              onChange={handleChange}
-              className="w-1/2 p-4 bg-gray-100 text-gray-900 placeholder-gray-500 rounded-lg focus:outline-none focus:ring-4 focus:ring-primary-300 transition"
-            />
+          <div className="space-y-4">
+            <div className="flex gap-4">
+              <input
+                type="time"
+                name="timeFrom"
+                placeholder="Start time"
+                value={habitData.timeFrom}
+                onChange={handleChange}
+                className="w-1/2 p-4 bg-gray-100 text-gray-900 placeholder-gray-500 rounded-lg focus:outline-none focus:ring-4 focus:ring-primary-300 transition"
+              />
 
-            <input
-              type="time"
-              name="timeTo"
-              placeholder="End time (optional)"
-              value={habitData.timeTo}
-              onChange={handleChange}
-              className="w-1/2 p-4 bg-gray-100 text-gray-900 placeholder-gray-500 rounded-lg focus:outline-none focus:ring-4 focus:ring-primary-300 transition"
-            />
+              <input
+                type="time"
+                name="timeTo"
+                placeholder="End time (optional)"
+                value={habitData.timeTo}
+                onChange={handleChange}
+                className="w-1/2 p-4 bg-gray-100 text-gray-900 placeholder-gray-500 rounded-lg focus:outline-none focus:ring-4 focus:ring-primary-300 transition"
+              />
+            </div>
+            {timeError && (
+              <p className="text-sm text-danger-600 mt-1">{timeError}</p>
+            )}
+            <p className="text-xs text-gray-500">Set specific start and end times for automatic status tracking</p>
           </div>
-          {timeError && (
-            <p className="text-sm text-danger-600 mt-1">{timeError}</p>
-          )}
 
           <div className="mt-4">
             <select

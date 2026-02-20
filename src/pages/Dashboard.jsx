@@ -1,14 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { PlusCircle, ListChecks, Flame, Trophy, Clock, LogOut, MessageCircle, RotateCcw } from 'lucide-react';
-import NotificationsDropdown from '../components/NotificationsDropdown';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import HabitCard from '../components/HabitCard';
 import AddHabitModal from '../components/AddHabitModal';
 import useHabits from '../hooks/useHabits.jsx';
 import MissedStreakModal from '../components/MissedStreakModal';
-import HabitGraph from '../components/HabitGraph';
+import NotificationsDropdown from '../components/NotificationsDropdown';
+import StreakBarGraph from '../components/dashboard/StreakBarGraph';
+import StreakLineGraph from '../components/dashboard/StreakLineGraph';
+import HabitAnalytics from '../components/dashboard/HabitAnalytics';
+import { toast } from 'react-hot-toast';
 
 
 const StatsCard = ({ title, value, icon, color, gradient }) => (
@@ -29,13 +32,12 @@ const StatsCard = ({ title, value, icon, color, gradient }) => (
 const DateButton = ({ date, isToday, isSelected, onClick }) => (
   <motion.button
     onClick={onClick}
-    className={`flex flex-col items-center justify-center p-4 rounded-2xl min-w-[4rem] transition-all font-semibold border-2 backdrop-blur-sm ${
-      isSelected
+    className={`flex flex-col items-center justify-center p-4 rounded-2xl min-w-[4rem] transition-all font-semibold border-2 backdrop-blur-sm ${isSelected
         ? 'bg-gradient-to-br from-purple-600 to-pink-600 text-white border-purple-600 shadow-xl'
         : isToday
-        ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-white border-yellow-400 shadow-lg'
-        : 'bg-white/80 text-neutral-700 border-neutral-200 hover:bg-white hover:border-purple-300 hover:shadow-lg'
-    }`}
+          ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-white border-yellow-400 shadow-lg'
+          : 'bg-white/80 text-neutral-700 border-neutral-200 hover:bg-white hover:border-purple-300 hover:shadow-lg'
+      }`}
     whileHover={{ scale: 1.08, y: -2 }}
     whileTap={{ scale: 0.95 }}
     aria-label={`Select ${format(date, 'EEEE, MMMM d')}`}
@@ -61,49 +63,51 @@ function Dashboard() {
   const [submittedMissedIds, setSubmittedMissedIds] = useState([]);
   const [restoreChances, setRestoreChances] = useState(0);
   const navigate = useNavigate();
-  const { habits, completedToday, streakCount, longestStreak, loading, error: habitsError, refetch } = useHabits();
+  const { habits, completedToday, streakCount, longestStreak, loading, error: habitsError, refetch, addHabit, completeHabit, deleteHabit } = useHabits();
+
+  // Filter habits into active and missed for stats calculations
+  const activeHabits = habits.filter(habit => habit.status !== 'missed');
+  const missedHabits = habits.filter(habit => habit.status === 'missed' && !submittedMissedIds.includes(String(habit._id)));
+  const totalActiveHabits = activeHabits.length;
+  const totalMissedHabits = missedHabits.length;
+  const totalHabits = totalActiveHabits + totalMissedHabits;
 
   // Fetch user info
-  const fetchUser = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Please log in to access the dashboard');
-      }
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/auth/me` ,{
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      if (!data.success) {
-        throw new Error(data.message || 'Failed to fetch user data');
-      }
-      setUser(data.user);
-    } catch (err) {
-      setError(err.message);
-      localStorage.removeItem('token');
-      navigate('/login');
-    }
-  }, [navigate]);
-
-
-  
-
   useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('Please log in to access the dashboard');
+        }
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (!data.success) {
+          throw new Error(data.message || 'Failed to fetch user data');
+        }
+        setUser(data.user);
+      } catch (err) {
+        setError(err.message);
+        localStorage.removeItem('token');
+        navigate('/login');
+      }
+    };
+
     fetchUser();
-  }, [fetchUser]);
+  }, [navigate]);
 
   // Listen for scheduled notifications dispatched by the habit scheduler
   useEffect(() => {
     const handler = (e) => {
       const detail = e.detail;
+      detail.id = detail.id || `notif-${Date.now()}-${Math.random()}`; // Ensure a unique ID
       setNotifications(prev => {
         const next = [detail, ...prev].slice(0, 100);
         localStorage.setItem('sm_notifications', JSON.stringify(next));
         return next;
       });
-      // also show a small in-app alert briefly
-      // eslint-disable-next-line no-alert
-      // alert(`${detail.habitName}: ${detail.body}`);
     };
     window.addEventListener('habitNotification', handler);
     return () => window.removeEventListener('habitNotification', handler);
@@ -152,7 +156,6 @@ function Dashboard() {
     }
   }, [user, fetchSubmittedMissed, fetchRestoreChances]);
 
-
   // Handler for missed streak modal open
   const handleMissedStreak = (habitId) => {
     const habit = habits.find(h => h._id === habitId);
@@ -161,7 +164,6 @@ function Dashboard() {
     setShowMissedModal(true);
     setMotivation('');
   };
-
 
   // Handler for AI motivation response
   const handleMotivation = async (habitId, habitName, reason) => {
@@ -176,18 +178,88 @@ function Dashboard() {
     });
     const data = await res.json();
     if (data.success) {
-      // Backend returns aiReply separately and saves only the user's reason in history
-      setLatestMotivation({
+      // Check if the AI reply is an error message from the backend.
+      // This now catches both "AI Error:" prefixes and the final fallback message.
+      const isErrorMessage = data.aiReply && (data.aiReply.startsWith('AI Error:') || data.aiReply.includes('All providers failed'));
+      if (isErrorMessage) {
+        toast.error(data.aiReply, { duration: 6000 }); // Show error toast for longer
+        return; // Stop further processing
+      }
+
+      const motivationData = {
         habitId,
         habitName: data.entry ? data.entry.habitName || habitName : habitName,
         userExplanation: data.entry ? data.entry.userExplanation : reason,
         aiReply: data.aiReply || (data.entry && data.entry.aiReply) || '',
         date: data.entry ? data.entry.date : new Date().toISOString()
-      });
-  // Hide the missed button for this habit after submission
-  setSubmittedMissedIds(prev => Array.from(new Set([...prev, String(habitId)])));
+      };
+
+      setLatestMotivation(motivationData);
+      setSubmittedMissedIds(prev => Array.from(new Set([...prev, String(habitId)])));
+
+      return motivationData;
     }
     setShowMissedModal(false);
+    throw new Error(data.message || 'Failed to get motivation');
+  };
+
+  // Handler for streak restoration
+  const handleRestore = async (habitId) => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/streak-restore/restore`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ habitId }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast.success(`Streak restored for ${data.habitName}!`);
+      // Refresh habits and restore chances
+      await refetch();
+      await fetchRestoreChances();
+      // Close the modal after successful restore
+      setShowMissedModal(false);
+      setSelectedHabitId(null);
+      setSelectedHabitName('');
+      return data;
+    }
+    throw new Error(data.message || 'Failed to restore streak');
+  };
+
+  // Handler for closing modal and removing habit from dashboard
+  const handleCloseModal = async () => {
+    if (selectedHabitId) {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/habits/${selectedHabitId}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          toast.success('Habit permanently removed from dashboard');
+          // Refresh habits to update the UI
+          refetch();
+        } else {
+          throw new Error(data.message || 'Failed to remove habit');
+        }
+      } catch (err) {
+        console.error('Error removing habit:', err);
+        toast.error(`Failed to remove habit: ${err.message}`);
+      }
+    }
+
+    // Close the modal
+    setShowMissedModal(false);
+    setSelectedHabitId(null);
+    setSelectedHabitName('');
   };
 
   const handleLogout = () => {
@@ -208,27 +280,23 @@ function Dashboard() {
   const handleAddHabit = useCallback(
     async (habitData) => {
       try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/habits`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(habitData),
-        });
-        const data = await response.json();
-        if (!data.success) {
-          throw new Error(data.message || 'Failed to add habit');
-        }
+        await addHabit(habitData);
         setShowAddModal(false);
-        refetch();
       } catch (err) {
         setError(err.message);
       }
     },
-    [refetch]
+    [addHabit]
   );
+
+  const handleRemoveNotification = (id) => {
+    setNotifications(prev => {
+      const newNotifications = prev.filter((n, i) => (n.id || i) !== id);
+      localStorage.setItem('sm_notifications', JSON.stringify(newNotifications));
+      return newNotifications;
+    });
+  };
+
 
   if (loading || !user) {
     return (
@@ -399,7 +467,6 @@ function Dashboard() {
       </div>
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-  {/* NOTE: Latest motivation is now displayed near the Missed Streak / Habits section */}
         {/* Header */}
         <motion.div
           className="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4"
@@ -416,7 +483,11 @@ function Dashboard() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <NotificationsDropdown notifications={notifications} onClear={() => { setNotifications([]); localStorage.removeItem('sm_notifications'); }} />
+            <NotificationsDropdown
+              notifications={notifications}
+              onClear={() => { setNotifications([]); localStorage.removeItem('sm_notifications'); }}
+              onRemove={handleRemoveNotification}
+            />
             <button
               onClick={handleLogout}
               className="bg-primary-600 text-white px-6 py-3 rounded-xl hover:bg-primary-700 flex items-center gap-2 font-bold text-base shadow-xl"
@@ -437,7 +508,7 @@ function Dashboard() {
         >
           <StatsCard
             title="Today's Progress"
-            value={habits.length > 0 ? `${completedToday}/${habits.length}` : '0/0'}
+            value={totalActiveHabits > 0 ? `${completedToday}/${totalActiveHabits}` : '0/0'}
             icon={<ListChecks size={24} />}
             color="border-primary-100"
             gradient="bg-gradient-to-br from-blue-500 to-purple-600"
@@ -465,7 +536,7 @@ function Dashboard() {
           />
           <StatsCard
             title="Active Habits"
-            value={habits.length}
+            value={totalActiveHabits}
             icon={<Clock size={24} />}
             color="border-emerald-100"
             gradient="bg-gradient-to-br from-green-500 to-emerald-600"
@@ -505,92 +576,136 @@ function Dashboard() {
           </button>
         </div>
 
-        {/* Missed Streak Motivation Section */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-            <MessageCircle size={20} className="text-primary-600" />
-            Missed Streak Motivation
-          </h3>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {habits.map(habit => {
-              const yesterday = new Date();
-              yesterday.setDate(yesterday.getDate() - 1);
-              const yestStr = format(yesterday, 'yyyy-MM-dd');
-              const createdAt = new Date(habit.createdAt);
-              const eligible = createdAt < new Date(yesterday.setHours(0,0,0,0));
-              const missedYesterday = !habit.completedDates.includes(yestStr);
-              // hide button if user already submitted a reason for this habit
-              const alreadySubmitted = submittedMissedIds.includes(String(habit._id));
-              return (missedYesterday && eligible && !alreadySubmitted) ? (
-                <button
-                  key={habit._id}
-                  className="px-3 py-1 rounded bg-primary-100 text-primary-700 hover:bg-primary-200 text-sm font-medium"
-                  onClick={() => handleMissedStreak(habit._id)}
+        {/* Render habits using pre-filtered data */}
+        {(() => {
+          return (
+            <>
+              {/* Active Habits Section */}
+              {activeHabits.length === 0 && missedHabits.length === 0 ? (
+                <motion.div
+                  className="text-center py-12 bg-white rounded-xl border border-neutral-200 shadow-soft"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5, delay: 0.3 }}
                 >
-                  {habit.name} (Missed Yesterday)
-                </button>
-              ) : null;
-            })}
-            {habits.every(habit => {
-              const yesterday = new Date();
-              yesterday.setDate(yesterday.getDate() - 1);
-              const yestStr = format(yesterday, 'yyyy-MM-dd');
-              const createdAt = new Date(habit.createdAt);
-              const eligible = createdAt < new Date(yesterday.setHours(0,0,0,0));
-              return !eligible || habit.completedDates.includes(yestStr);
-            }) && (
-              <span className="text-neutral-500 text-sm">No missed streaks for yesterday! 🎉</span>
-            )}
-          </div>
-          {/* Latest motivation displayed next to the missed streak buttons */}
-          {latestMotivation && latestMotivation.habitId === selectedHabitId && (
-            <div className="bg-white border border-primary-100 rounded-lg p-3 mt-3 shadow-soft max-w-md">
-              <div className="text-sm text-neutral-600 mb-1"><strong>Habit:</strong> {latestMotivation.habitName}</div>
-              <div className="text-sm text-neutral-700 mb-1"><strong>Your Reason:</strong> {latestMotivation.userExplanation}</div>
-              <div className="text-sm text-primary-700"><strong>AI Reply:</strong> {latestMotivation.aiReply}</div>
+                  <h3 className="text-lg font-semibold text-neutral-900 mb-2">No habits yet</h3>
+                  <p className="text-neutral-600 mb-4 text-sm">Start building your first habit today!</p>
+                  <button
+                    onClick={() => setShowAddModal(true)}
+                    className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 flex items-center gap-2 mx-auto"
+                    aria-label="Add your first habit"
+                  >
+                    <PlusCircle size={18} />
+                    <span>Add Your First Habit</span>
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.div
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.3 }}
+                >
+                  {activeHabits.map((habit) => (
+                    <HabitCard
+                      key={habit._id}
+                      habit={habit}
+                      selectedDate={selectedDate}
+                      refetch={refetch}
+                      completeHabit={completeHabit}
+                      deleteHabit={deleteHabit}
+                    />
+                  ))}
+                </motion.div>
+              )}
+
+              {/* Missed Habits Section */}
+              {missedHabits.length > 0 && (
+                <motion.div
+                  className="mt-8"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.4 }}
+                >
+                  <h2 className="text-xl font-display font-bold text-neutral-900 mb-4">Missed Today</h2>
+                  <motion.div
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.5 }}
+                  >
+                    {missedHabits.map((habit) => (
+                      <motion.div
+                        key={habit._id}
+                        className="bg-white rounded-2xl p-6 shadow-soft border border-red-200 opacity-75"
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 0.75, scale: 1 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xl shadow-md">
+                              <span role="img" aria-label="habit emoji">{habit.emoji || '🎯'}</span>
+                            </div>
+                            <div>
+                              <h3 className="font-display font-bold text-lg text-neutral-900">{habit.name}</h3>
+                              <p className="text-sm text-neutral-600">
+                                {habit.frequency === 'daily' ? 'Daily' : `${habit.target}x per week`}
+                              </p>
+                              <p className="text-xs text-neutral-500">
+                                Time: {habit.timeFrom || habit.time} - {habit.timeTo || 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mb-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-sm font-medium text-red-600">Missed Today</span>
+                          </div>
+                          <p className="text-sm text-neutral-600 mb-3">
+                            You missed this habit's scheduled time. Submit an explanation to restore your streak.
+                          </p>
+
+                          {!submittedMissedIds.includes(String(habit._id)) && (
+                            <button
+                              onClick={() => handleMissedStreak(habit._id)}
+                              className="w-full bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 flex items-center justify-center gap-2 font-medium"
+                            >
+                              <MessageCircle size={16} />
+                              Explain & Restore
+                            </button>
+                          )}
+
+                          {submittedMissedIds.includes(String(habit._id)) && (
+                            <div className="w-full bg-green-100 text-green-800 px-4 py-2 rounded-lg text-center font-medium">
+                              ✓ Explanation Submitted
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                </motion.div>
+              )}
+            </>
+          );
+        })()}
+
+        {/* Habit Graphs Section */}
+        {habits.length > 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="col-span-1 lg:col-span-2">
+              <StreakLineGraph habits={habits} />
             </div>
-          )}
-        </div>
-
-        <MissedStreakModal
-          open={showMissedModal}
-          onClose={() => setShowMissedModal(false)}
-          habitId={selectedHabitId}
-          habitName={selectedHabitName}
-          onMotivation={handleMotivation}
-        />
-  {/* Motivation History button removed per request; history is accessible near each habit's missed-streak actions */}
-
-        {habits.length === 0 ? (
-          <motion.div
-            className="text-center py-12 bg-white rounded-xl border border-neutral-200 shadow-soft"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-          >
-            <h3 className="text-lg font-semibold text-neutral-900 mb-2">No habits yet</h3>
-            <p className="text-neutral-600 mb-4 text-sm">Start building your first habit today!</p>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 flex items-center gap-2 mx-auto"
-              aria-label="Add your first habit"
-            >
-              <PlusCircle size={18} />
-              <span>Add Your First Habit</span>
-            </button>
-          </motion.div>
-        ) : (
-          <motion.div
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-          >
-            {habits.map((habit) => (
-              <HabitCard key={habit._id} habit={habit} selectedDate={selectedDate} refetch={refetch} />
-            ))}
-          </motion.div>
-        )}
+            <div className="col-span-1">
+              <HabitAnalytics habits={habits} />
+            </div>
+            <div className="col-span-1 lg:col-span-3">
+              <StreakBarGraph habits={habits} />
+            </div>
+          </div>
+        ) : null}
 
         <AddHabitModal
           open={showAddModal}
@@ -598,8 +713,15 @@ function Dashboard() {
           onAdd={handleAddHabit}
         />
 
-        {/* Habit Graph Section */}
-        <HabitGraph habits={habits} />
+        <MissedStreakModal
+          open={showMissedModal}
+          onClose={handleCloseModal}
+          habitId={selectedHabitId}
+          habitName={selectedHabitName}
+          onMotivation={handleMotivation}
+          onRestore={handleRestore}
+          restoreChances={restoreChances}
+        />
       </div>
     </div>
   );

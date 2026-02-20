@@ -1,73 +1,81 @@
 import express from "express";
-import fetch from "node-fetch";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import dotenv from 'dotenv';
-dotenv.config();
+import genAI from '../services/aiClients.js';
+import { getEmotionType, generateEmotionalPrompt } from '../services/emotionalEngine.js';
+import EmotionLog from '../models/EmotionLog.js';
+import authMiddleware from '../middleware/authMiddleware.js';
+
 const router = express.Router();
 
-// Gemini client
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-console.log("apikey",process.env.GEMINI_API_KEY)
-// Hugging Face model endpoint (emotion detection)
-const HF_API_URL = "https://api-inference.huggingface.co/models/j-hartmann/emotion-english-distilroberta-base";
-
-async function detectEmotion(text) {
+router.post("/", authMiddleware, async (req, res) => {
   try {
-    const response = await fetch(HF_API_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.HF_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ inputs: text }),
-    });
+    const { message, habitName, currentStreak, longestStreak, missedReason, habitId } = req.body;
 
-    const result = await response.json();
-    if (Array.isArray(result) && result[0]) {
-      return result[0].label; // highest scoring emotion
-    }
-    return "neutral";
-  } catch (err) {
-    console.error("Emotion API error:", err);
-    return "neutral";
-  }
-}
-
-// Chatbot route
-router.post("/", async (req, res) => {
-  try {
-    const { message } = req.body;
-    if (!message) {
-      return res.status(400).json({ success: false, error: "Message is required" });
+    // We can accept either a standard chat message OR a missed streak reason event
+    if (!message && !missedReason) {
+      return res.status(400).json({ success: false, error: "Message or missedReason is required" });
     }
 
-    // Step 1: detect emotion
-    const emotion = await detectEmotion(message);
+    const streak = currentStreak || 0;
+    const isMissTrigger = !!missedReason;
 
-    // Step 2: system prompt
-    const systemPrompt = `
-You are StreakBuddy 🤖, a fun, witty, and supportive AI friend inside StreakMates.
-The user is currently feeling: ${emotion}.
+    // 1. Determine the Emotion Type
+    const emotionType = getEmotionType(streak, isMissTrigger);
 
-- Reply short and casual, like a real friend.
-- Use emojis naturally, but not too much.
-- If they are sad/angry, be more empathetic.
-- If they are happy/excited, be more playful and encouraging.
-- Always keep tone human and friendly.
-`;
+    // 2. Generate the dynamic System Prompt
+    const systemPrompt = generateEmotionalPrompt(
+      habitName,
+      streak,
+      longestStreak,
+      missedReason,
+      emotionType
+    );
 
-    // Step 3: get reply from Gemini
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const response = await model.generateContent([systemPrompt, message]);
+    let reply = "";
+
+    // 3. Call Gemini API
+    if (genAI) {
+      try {
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const userPrompt = missedReason ? `I missed my streak because: ${missedReason}` : message;
+
+        const response = await model.generateContent([systemPrompt, userPrompt]);
+        reply = response.response.text().trim();
+      } catch (aiError) {
+        console.error("Gemini AI error:", aiError.message);
+        reply = "I'm having trouble thinking right now, but just know I'm always rooting for you! ❤️";
+      }
+    } else {
+      reply = "StreakBuddy is offline right now, but you're doing great. Keep going! 💪";
+    }
+
+    // 4. Save to EmotionLog if related to a habit event
+    if (habitId || missedReason) {
+      try {
+        await EmotionLog.create({
+          userId: req.user.id,
+          habitId: habitId || null,
+          currentStreak: streak,
+          missedReason: missedReason || "",
+          emotionType,
+          aiResponse: reply
+        });
+      } catch (logErr) {
+        console.error("Error saving EmotionLog:", logErr.message);
+      }
+    }
 
     res.json({
       success: true,
-      emotion,
-      reply: response.response.text(),
+      emotionType,
+      reply
     });
   } catch (err) {
     console.error("Chatbot Error:", err);
-    res.status(500).json({ success: false, error: "Something went wrong with chatbot" });
+    res.status(500).json({
+      success: false,
+      error: "Chatbot temporarily unavailable",
+      fallbackReply: "Hey! Something went wrong, but I'm still here for you! 🌟"
+    });
   }
 });
 

@@ -2,52 +2,61 @@ import express from 'express';
 import authMiddleware from '../middleware/authMiddleware.js';
 import MissedStreak from '../models/missedStreak.js';
 import Habit from '../models/habit.js';
+import genAI from '../services/aiClients.js';
+import { getEmotionType, generateEmotionalPrompt } from '../services/emotionalEngine.js';
 
-// Generate a contextual AI reply using template-based fallback to avoid repetitive replies.
-async function generateMotivation(reason, habitName = '', user = {}) {
+// Generate a contextual AI reply using Gemini AI based on user's explanation
+async function generateMotivation(reason, habit, user = {}) {
   const cleaned = (reason || '').trim();
-  // Use template-based fallback for motivation
+  // If no reason is provided, we cannot generate a message.
+  if (!cleaned) {
+    return "A reason is required to generate a motivational message.";
+  }
 
-  // Template fallback with small randomization to avoid identical replies
-  const templates = {
-    sick: [
-      "Take the time you need — your health matters. When you feel ready, come back to ${habit} one small step at a time.",
-      "Rest up and be kind to yourself. A short recovery will help you return stronger to ${habit}.",
-      "Your wellbeing comes first. Focus on recovering and later ease back into ${habit} with a tiny goal."
-    ],
-    study: [
-      "Good on you for prioritizing study — the habit will be here when you're ready. Try a 5-minute version of ${habit} after your revision.",
-      "Balancing study and habits is tough. Small wins count — do one short routine for ${habit} when you can.",
-      "Keep going with your studies; when time frees up, ease back into ${habit} with a tiny attainable task."
-    ],
-    busy: [
-      "Life gets busy — that’s normal. Even 3-5 minutes for ${habit} keeps momentum and reduces friction.",
-      "Busy days happen. Try a micro-version of ${habit} today to stay connected to the routine.",
-      "Consistency beats perfection. A small action towards ${habit} today is better than nothing."
-    ],
-    work: [
-      "Work can pile up — try scheduling a short break to do a quick ${habit} step and your energy will thank you.",
-      "It’s okay to let things slide during intense work. When possible, carve a tiny pocket for ${habit} to rebuild momentum.",
-      "Honor your work responsibilities; then reward yourself with a brief ${habit} action to keep the streak alive."
-    ],
-    default: [
-      "Everyone faces setbacks. Don't be harsh on yourself — take one small step for ${habit} tomorrow.",
-      "Setbacks are temporary. Keep the lesson, then try a tiny, easy step for ${habit} to get back on track.",
-      "This happens to everyone. Focus on your next small action for ${habit} and celebrate that return."
-    ]
-  };
+  // --- Use Google Gemini API ---
+  try {
+    if (!genAI) {
+      throw new Error("Gemini AI client is not initialized due to a missing API key.");
+    }
 
-  const low = cleaned.toLowerCase();
-  let bucket = 'default';
-  if (low.includes('sick') || low.includes('ill') || low.includes('fever')) bucket = 'sick';
-  else if (low.includes('exam') || low.includes('study') || low.includes('revision')) bucket = 'study';
-  else if (low.includes('busy') || low.includes('overtime') || low.includes('packed')) bucket = 'busy';
-  else if (low.includes('work') || low.includes('job') || low.includes('shift')) bucket = 'work';
+    console.log("Attempting to generate motivation with Gemini...");
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
-  const choices = templates[bucket] || templates.default;
-  const pick = choices[Math.floor(Math.random() * choices.length)];
-  // replace placeholder and ensure short length
-  return pick.replace(/\$\{habit\}/g, habitName || 'this habit');
+    const streak = habit && habit.streak ? habit.streak : 0;
+    const longestStreak = habit && habit.longestStreak ? habit.longestStreak : 0;
+
+    // Determine emotion type
+    const emotionType = getEmotionType(streak, true);
+
+    // Generate system prompt
+    const systemPrompt = generateEmotionalPrompt(
+      habit ? habit.name : '',
+      streak,
+      longestStreak,
+      reason,
+      emotionType
+    );
+
+    const userPrompt = `I missed my streak because: '${reason}'. Please help me!`;
+
+    const result = await model.generateContent([systemPrompt, userPrompt]);
+    const geminiReply = result.response.text().trim();
+
+    if (geminiReply) {
+      console.log("Successfully generated motivation with Gemini.");
+      return geminiReply;
+    }
+
+    throw new Error("Gemini returned an empty response.");
+  } catch (aiError) {
+    console.error(`AI Error: Gemini failed. ${aiError.message}`);
+
+    if (aiError.message && aiError.message.includes("API key not valid")) {
+      return "AI Error: The Gemini API key is invalid or missing. Please check the server configuration.";
+    }
+
+    return "I'm having a little trouble thinking of the right words. Just remember that every day is a new opportunity to succeed!";
+  }
 }
 
 // Save missed streak with AI reply
@@ -66,12 +75,12 @@ const saveMotivation = async (req, res) => {
     });
     if (existing) {
       // generate a fresh ai reply but do not save it
-      const freshReply = await generateMotivation(userExplanation, habit.name, req.user || {});
+      const freshReply = await generateMotivation(userExplanation, habit, req.user || {});
       return res.json({ success: true, entry: existing, aiReply: freshReply });
     }
 
     // generate an AI reply (may call OpenAI or fallback templates)
-    const aiReply = await generateMotivation(userExplanation, habit.name, req.user || {});
+    const aiReply = await generateMotivation(userExplanation, habit, req.user || {});
 
     // Save only the user's reason to history
     const entry = new MissedStreak({

@@ -23,12 +23,14 @@
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.544.0",
     "mongoose": "^8.18.1",
+    "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
     "openai": "^5.20.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-hot-toast": "^2.6.0",
-    "react-router-dom": "^7.9.1"
+    "react-router-dom": "^7.9.1",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.21",

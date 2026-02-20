@@ -56,15 +56,21 @@ function Register() {
     
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-
+    if (!validateForm()) {
+      return;
+    }
+    setIsLoading(true);
     try {
-      const res = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/auth/signup`, form);
-      localStorage.setItem("token", res.data.token);
-      console.log(res);
-      navigate("/dashboard");
+      await register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+      });
+      navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || "Something went wrong");
+      setErrors({ api: err.message || 'Registration failed. Please try again.' });
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -179,6 +185,7 @@ function Register() {
                 {errors.confirmPassword && <p className="mt-1 text-sm text-red-500">{errors.confirmPassword}</p>}
               </div>
               
+              {errors.api && <p className="mb-4 text-sm text-center text-red-500">{errors.api}</p>}
               <button
                 type="submit"
                 className="btn-primary w-full py-3 flex items-center justify-center gap-2"

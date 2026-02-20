@@ -1,10 +1,7 @@
-import { useState } from 'react';
-import {
-  Bar,
-  Line,
-  Pie,
-} from 'react-chartjs-2';
+import React, { useState } from 'react';
+import { Bar, Line, Doughnut } from 'react-chartjs-2';
 import { Chart, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend } from 'chart.js';
+import { format } from 'date-fns';
 
 Chart.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend);
 
@@ -15,69 +12,184 @@ const chartTypes = [
 ];
 
 function HabitGraph({ habits }) {
-  const [type, setType] = useState('bar');
+  const [activeChart, setActiveChart] = useState('dailyCompletions'); // 'dailyCompletions', 'streakTrend', 'statusDistribution'
 
-  // Example: show completions for the last 7 days for each habit
-  const today = new Date();
-  const labels = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() - (6 - i));
-    return d.toLocaleDateString();
-  });
-
-  // For each habit, count completions for each day
-  const datasets = habits.map((habit, idx) => {
-    const data = labels.map(labelDate => {
-      const [month, day, year] = labelDate.split('/');
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      return habit.completedDates.includes(dateStr) ? 1 : 0;
-    });
-    return {
-      label: habit.name,
-      data,
-      backgroundColor: `hsl(${idx * 60}, 70%, 60%)`,
-      borderColor: `hsl(${idx * 60}, 70%, 40%)`,
-      fill: false,
-    };
-  });
-
-  const barLineData = {
-    labels,
-    datasets,
+  // Get last 30 days
+  const getLast30Days = () => {
+    const dates = [];
+    const today = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - i);
+      dates.push(format(date, 'MMM dd'));
+    }
+    return dates;
   };
 
-  // For pie chart, show total completions per habit
-  const pieData = {
-    labels: habits.map(h => h.name),
+  const last30DaysLabels = getLast30Days();
+
+  // Process daily completions over last 30 days
+  const dailyCompletionsData = habits.reduce((acc, habit) => {
+    if (!habit.completedDates) return acc;
+    habit.completedDates.forEach(dateStr => {
+      const date = new Date(dateStr);
+      const dayIndex = Math.floor((new Date() - date) / (1000 * 60 * 60 * 24));
+      if (dayIndex >= 0 && dayIndex <= 29) {
+        acc[dayIndex] = (acc[dayIndex] || 0) + 1;
+      }
+    });
+    return acc;
+  }, {});
+
+  const dailyCompletions = last30DaysLabels.map((_, index) => dailyCompletionsData[index] || 0);
+
+  const dailyCompletionsChart = {
+    labels: last30DaysLabels,
     datasets: [
       {
-        data: habits.map(h => h.completedDates.length),
-        backgroundColor: habits.map((_, idx) => `hsl(${idx * 60}, 70%, 60%)`),
+        label: 'Daily Completions',
+        data: dailyCompletions,
+        borderColor: 'rgb(59, 130, 246)',
+        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+        tension: 0.1,
       },
     ],
   };
 
+  // Streak trend: Approximate as cumulative completions or daily streak (simplified as rolling average)
+  const streakTrendData = dailyCompletions.map((completions, index) => {
+    // Simple rolling streak approximation: if completions > 0, streak continues
+    let streak = 0;
+    for (let i = index; i < dailyCompletions.length; i++) {
+      if (dailyCompletions[i] > 0) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }).reverse(); // Reverse to show from past to present
+
+  const streakTrendChart = {
+    labels: last30DaysLabels,
+    datasets: [
+      {
+        label: 'Streak Days',
+        data: streakTrendData,
+        borderColor: 'rgb(34, 197, 94)',
+        backgroundColor: 'rgba(34, 197, 94, 0.2)',
+        fill: true,
+        tension: 0.4,
+      },
+    ],
+  };
+
+  // Status distribution
+  const statusCounts = habits.reduce((acc, habit) => {
+    const status = habit.status || 'pending';
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+
+  const statusChart = {
+    labels: Object.keys(statusCounts),
+    datasets: [
+      {
+        label: 'Habits by Status',
+        data: Object.values(statusCounts),
+        backgroundColor: [
+          'rgb(34, 197, 94)', // completed green
+          'rgb(59, 130, 246)', // pending blue
+          'rgb(239, 68, 68)', // missed red
+        ],
+        borderColor: [
+          'rgb(34, 197, 94)',
+          'rgb(59, 130, 246)',
+          'rgb(239, 68, 68)',
+        ],
+        borderWidth: 2,
+      },
+    ],
+  };
+
+  const baseOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+      },
+      tooltip: {
+        backgroundColor: 'rgba(17, 24, 39, 0.9)',
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        cornerRadius: 8,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: {
+          color: 'rgba(0, 0, 0, 0.1)',
+        },
+      },
+      x: {
+        grid: {
+          display: false,
+        },
+      },
+    },
+  };
+
+  const doughnutOptions = {
+    ...baseOptions,
+    plugins: {
+      ...baseOptions.plugins,
+      legend: {
+        position: 'right',
+      },
+    },
+    cutout: '60%',
+  };
+
+  if (habits.length === 0) {
+    return (
+      <div className="bg-white rounded-xl shadow-soft border border-neutral-200 p-6 mt-8">
+        <div className="text-center">
+          <div className="text-4xl mb-2">📊</div>
+          <p>No habits data available</p>
+          <p className="text-sm mt-1 text-neutral-500">Add some habits to see your progress graphs!</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-soft border border-neutral-200 p-6 mt-8">
-      <div className="flex items-center gap-4 mb-4">
-        <label className="font-semibold text-neutral-700">Graph Type:</label>
-        <select
-          className="border rounded px-3 py-1"
-          value={type}
-          onChange={e => setType(e.target.value)}
-        >
-          {chartTypes.map(opt => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-semibold text-neutral-800">Habit Progress Graphs</h3>
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-neutral-600">View:</label>
+          <select
+            className="border border-neutral-300 rounded-lg px-3 py-1.5 bg-white text-sm font-medium"
+            value={activeChart}
+            onChange={e => setActiveChart(e.target.value)}
+          >
+            <option value="dailyCompletions">Daily Completions (Bar)</option>
+            <option value="streakTrend">Streak Trend (Line)</option>
+            <option value="statusDistribution">Status Distribution (Doughnut)</option>
+          </select>
+        </div>
       </div>
-      <div className="w-full max-w-2xl mx-auto">
-        {type === 'bar' && <Bar data={barLineData} />}
-        {type === 'line' && <Line data={barLineData} />}
-        {type === 'pie' && <Pie data={pieData} />}
+
+      <div className="w-full h-64">
+        {activeChart === 'dailyCompletions' && <Bar data={dailyCompletionsChart} options={baseOptions} />}
+        {activeChart === 'streakTrend' && <Line data={streakTrendChart} options={baseOptions} />}
+        {activeChart === 'statusDistribution' && <Doughnut data={statusChart} options={doughnutOptions} />}
       </div>
-      <div className="mt-4 text-xs text-neutral-500">
-        <span>Tree graph is not supported in Chart.js. For advanced visualizations, consider using D3.js or a specialized library.</span>
+
+      <div className="mt-4 text-xs text-neutral-500 text-center">
+        Graphs update live every 30 seconds as habits are completed or updated.
       </div>
     </div>
   );

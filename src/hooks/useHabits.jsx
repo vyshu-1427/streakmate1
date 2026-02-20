@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { format, isSameDay, differenceInDays, subDays } from 'date-fns';
+import { format, isSameDay, subDays } from 'date-fns';
 import { toast } from 'react-hot-toast';
+import { useSocket } from '../context/SocketContext';
 
 const useHabits = () => {
   const [habits, setHabits] = useState([]);
@@ -10,6 +11,7 @@ const useHabits = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const scheduledTimeouts = useRef([]);
+  const { socket } = useSocket() || {};
 
   const fetchHabits = async () => {
     console.log('useHabits: Starting fetchHabits');
@@ -47,10 +49,20 @@ const useHabits = () => {
         throw new Error(data.message || 'Failed to fetch habits');
       }
 
-      setHabits(data.habits);
-  calculateStats(data.habits);
+      // Debug: Log all habit names to help user see what they have
+      console.log('useHabits: Your habits:', data.habits.map(h => ({
+        name: h.name,
+        id: h._id,
+        status: h.status,
+        frequency: h.frequency,
+        createdAt: h.createdAt
+      })));
+
+      // Calculate stats and update state properly
+      const updatedHabits = calculateStats(data.habits);
       setLoading(false);
       console.log('useHabits: Habits fetched successfully, loading set to false');
+      return data.habits; // Return the habits for external use
     } catch (err) {
       console.error('useHabits: Error in fetchHabits:', err.message);
       // Only set a global error for auth issues; otherwise keep it local to the hook
@@ -62,6 +74,7 @@ const useHabits = () => {
       }
       setLoading(false);
       setHabits([]);
+      throw err; // Re-throw the error so calling code can handle it
     }
   };
 
@@ -91,6 +104,43 @@ const useHabits = () => {
     }
   };
 
+  const markHabitAsMissed = async (habitId) => {
+    console.log(`useHabits: Attempting to mark habit as missed: ${habitId}`);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('Authentication token not found');
+
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/habits/${habitId}/miss`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to mark habit as missed');
+      }
+
+      console.log(`useHabits: Habit ${habitId} marked as missed successfully.`);
+
+      // Dispatch a notification for the missed habit
+      const detail = {
+        habitId: habitId,
+        habitName: data.habit.name,
+        body: `You missed your scheduled time for "${data.habit.name}".`,
+        date: new Date().toISOString(),
+      };
+      window.dispatchEvent(new CustomEvent('habitNotification', { detail }));
+      toast.error(`You missed: ${data.habit.name}`);
+
+      await fetchHabits(); // Refetch to update the UI
+    } catch (err) {
+      console.error('Error marking habit as missed:', err);
+    }
+  };
+
   const scheduleForHabit = (habit) => {
     if (!habit) return;
     // prefer timeFrom (range) then fallback to single time
@@ -107,6 +157,25 @@ const useHabits = () => {
     }
     const delay = target.getTime() - now.getTime();
     const id = setTimeout(async () => {
+      // Check if habit still exists in current habits list before showing notification
+      const currentHabits = await fetchHabits().catch(() => []);
+      const habitStillExists = currentHabits.some(h => h._id === habit._id);
+
+      if (!habitStillExists) {
+        console.log(`Notification skipped: Habit "${habit.name}" no longer exists`);
+        return;
+      }
+
+      // Check if habit is already completed today
+      const currentHabit = currentHabits.find(h => h._id === habit._id);
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const isCompletedToday = currentHabit && currentHabit.completedDates && currentHabit.completedDates.some(date => format(new Date(date), 'yyyy-MM-dd') === todayStr);
+
+      if (isCompletedToday) {
+        console.log(`Notification skipped: Habit "${habit.name}" already completed today`);
+        return;
+      }
+
       const title = `Time for: ${habit.name}`;
       const body = habit.description || `It's time to do ${habit.name}`;
 
@@ -153,7 +222,7 @@ const useHabits = () => {
           try {
             const token = localStorage.getItem('token');
             if (token) {
-              fetch(`${import.meta.env.VITE_BACKEND_URL/api/notifications}` , {
+              fetch(`${import.meta.env.VITE_BACKEND_URL}/api/notifications`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify(detail),
@@ -173,11 +242,50 @@ const useHabits = () => {
         console.log('Notification deduped for', detail.habitId || detail.habitName, timeToUse);
       }
 
-      // schedule next occurrence in 24h by scheduling again
-      const nextId = setTimeout(() => scheduleForHabit(habit), 24 * 60 * 60 * 1000);
+      // schedule next occurrence in 24h only if habit still exists
+      const nextId = setTimeout(async () => {
+        const stillCurrentHabits = await fetchHabits().catch(() => []);
+        const stillExists = stillCurrentHabits.some(h => h._id === habit._id);
+        if (stillExists) {
+          scheduleForHabit(habit);
+        }
+      }, 24 * 60 * 60 * 1000);
       scheduledTimeouts.current.push(nextId);
     }, delay);
     scheduledTimeouts.current.push(id);
+
+    // --- NEW: Schedule a check for the END time to mark as missed ---
+    const timeForMissedCheck = habit.timeTo || habit.time;
+    if (!timeForMissedCheck) return;
+
+    const [endHh, endMm] = timeForMissedCheck.split(':').map(Number);
+    if (isNaN(endHh) || isNaN(endMm)) return;
+
+    const missTarget = new Date(now.getFullYear(), now.getMonth(), now.getDate(), endHh, endMm, 0, 0);
+    missTarget.setMinutes(missTarget.getMinutes() + 1); // Trigger 1 minute after end time
+
+    if (missTarget.getTime() <= now.getTime()) {
+      // Already past the missed check time for today, do nothing.
+      return;
+    }
+
+    const missDelay = missTarget.getTime() - now.getTime();
+    const missCheckId = setTimeout(async () => {
+      // Refetch to get the latest habit status
+      const currentHabits = await fetchHabits().catch(() => []);
+      const currentHabit = currentHabits.find(h => h._id === habit._id);
+
+      if (!currentHabit) return; // Habit was deleted
+
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const isCompletedToday = currentHabit.completedDates && currentHabit.completedDates.some(date => format(new Date(date), 'yyyy-MM-dd') === todayStr);
+
+      if (!isCompletedToday) {
+        // If not completed by the end time, mark it as missed
+        await markHabitAsMissed(habit._id);
+      }
+    }, missDelay);
+    scheduledTimeouts.current.push(missCheckId);
   };
 
   const scheduleNotifications = async (habitsList) => {
@@ -205,38 +313,118 @@ const useHabits = () => {
       if (!data.success) {
         throw new Error(data.message || 'Failed to complete habit');
       }
+
+      // Show success toast immediately
+      toast.success('Habit completed successfully!');
+
       // Refetch habits after completion
       await fetchHabits();
     } catch (err) {
       console.error('Error completing habit:', err);
+      toast.error(`Failed to complete habit: ${err.message}`);
       setError(err.message);
     }
   };
 
-  const deleteHabit = async (id) => {
-    // console.log(`useHabits: Attempting to delete habit with id: ${id}`);
+  const addHabit = async (habitData) => {
+    console.log('useHabits: Attempting to add new habit:', habitData);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/${id}`, {
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/habits`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(habitData),
+      });
+
+      const data = await response.json();
+      console.log('useHabits: Add habit response:', data);
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to add habit');
+      }
+
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to add habit');
+      }
+
+      console.log('useHabits: Habit added successfully:', data.habit);
+      toast.success('Habit added successfully!');
+
+      // Refetch habits to get the updated list
+      await fetchHabits();
+      return data.habit;
+    } catch (err) {
+      console.error('useHabits: Error adding habit:', err.message);
+      toast.error(`Failed to add habit: ${err.message}`);
+      throw err;
+    }
+  };
+
+  const deleteHabit = async (id) => {
+    console.log(`useHabits: Attempting to delete habit with id: ${id}`);
+    try {
+      const token = localStorage.getItem('token');
+      console.log('useHabits: Token for delete:', token ? 'Present' : 'Missing');
+
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/habits/${id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
       });
+
+      console.log('useHabits: Delete response status:', response.status);
+
+      if (!response.ok) {
+        let errorMessage = `HTTP error! Status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          if (errorData && errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (e) {
+          console.warn('useHabits: Could not parse error response as JSON');
+        }
+        throw new Error(errorMessage);
+      }
+
       const data = await response.json();
-      console.log('useHabits: Delete response:', data);
+      console.log('useHabits: Delete response data:', data);
+
       if (!data.success) {
         throw new Error(data.message || 'Failed to delete habit');
       }
-      // Refetch habits after deletion
-      fetchHabits();
+
+      console.log('useHabits: Habit deleted successfully:', data.message);
+
+      // Show success toast
+      toast.success('Habit deleted successfully!');
+
+      // Update local state immediately by filtering the habit and recalculating stats
+      setHabits(prevHabits => {
+        const updatedHabits = prevHabits.filter(habit => habit._id !== id);
+        calculateStats(updatedHabits); // Reuse the existing stats calculation logic
+        return updatedHabits; // This will be the new habits array without the deleted one
+      });
+
+      return true;
     } catch (err) {
-      console.error('Error deleting habit:', err);
-      // don't set global error here (prevents replacing the dashboard with the error modal)
-      // return false so callers can handle failure appropriately
+      console.error('useHabits: Error deleting habit:', err.message);
+      toast.error(`Failed to delete habit: ${err.message}`);
       return false;
     }
-    return true;
   };
 
   const calculateStats = (habits) => {
@@ -246,11 +434,12 @@ const useHabits = () => {
     let currentStreak = 0;
     let maxStreak = 0;
 
-  const updatedHabits = [];
-  habits.forEach((habit) => {
-      console.log(`useHabits: Processing habit: ${habit.name}, frequency: ${habit.frequency}`);
+    const updatedHabits = [];
+    habits.forEach((habit) => {
+      console.log(`useHabits: Processing habit: ${habit.name}, frequency: ${habit.frequency}, status: ${habit.status}`);
       // Normalize completed dates into a set of yyyy-MM-dd strings for reliable checks
       const completedSet = new Set((habit.completedDates || []).map(d => format(new Date(d), 'yyyy-MM-dd')));
+
       // Count habits completed today
       if (completedSet.has(today)) {
         todayCount++;
@@ -260,18 +449,27 @@ const useHabits = () => {
       let streak = 0;
 
       if (habit.frequency === 'daily') {
-        // Start checking from today; if today not completed, start from yesterday
-        let checkDate = new Date();
-        let checkStr = format(checkDate, 'yyyy-MM-dd');
-        if (!completedSet.has(checkStr)) {
-          checkDate = subDays(checkDate, 1);
-          checkStr = format(checkDate, 'yyyy-MM-dd');
-        }
-        // Count consecutive days backwards while dates exist in the set
-        while (completedSet.has(checkStr)) {
-          streak++;
-          checkDate = subDays(checkDate, 1);
-          checkStr = format(checkDate, 'yyyy-MM-dd');
+        // For daily habits, check if the habit was missed today
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const isMissedToday = habit.status === 'missed' && !completedSet.has(todayStr);
+
+        if (isMissedToday) {
+          // If missed today, streak is 0
+          streak = 0;
+        } else {
+          // Start checking from today; if today not completed, start from yesterday
+          let checkDate = new Date();
+          let checkStr = format(checkDate, 'yyyy-MM-dd');
+          if (!completedSet.has(checkStr)) {
+            checkDate = subDays(checkDate, 1);
+            checkStr = format(checkDate, 'yyyy-MM-dd');
+          }
+          // Count consecutive days backwards while dates exist in the set
+          while (completedSet.has(checkStr)) {
+            streak++;
+            checkDate = subDays(checkDate, 1);
+            checkStr = format(checkDate, 'yyyy-MM-dd');
+          }
         }
       } else if (habit.frequency === 'weekly') {
         // weekly logic unchanged but use completedSet-derived dates array
@@ -299,28 +497,49 @@ const useHabits = () => {
       }
     });
 
-  // update state with enriched habits array
-  setHabits(updatedHabits);
+    // update state with enriched habits array
+    setHabits(updatedHabits);
     setCompletedToday(todayCount);
     setStreakCount(currentStreak);
     setLongestStreak(maxStreak);
     console.log('useHabits: Stats updated - completedToday:', todayCount, 'streakCount:', currentStreak, 'longestStreak:', maxStreak);
-  // schedule notifications for habits with times
-  try { scheduleNotifications(updatedHabits); } catch (err) { console.error('Failed to schedule notifications', err); }
+    // schedule notifications for habits with times
+    try { scheduleNotifications(updatedHabits); } catch (err) { console.error('Failed to schedule notifications', err); }
+
+    // Return the updated habits array for external use
+    return updatedHabits;
   };
 
   useEffect(() => {
     console.log('useHabits: useEffect triggered, calling fetchHabits');
     fetchHabits();
-  }, []);
 
-  useEffect(() => {
     return () => {
       clearScheduled();
     };
   }, []);
 
-  return { habits, completedToday, streakCount, longestStreak, loading, error, refetch: fetchHabits, deleteHabit, completeHabit };
+  // Real-time updates via Socket.io
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleLiveUpdate = () => {
+      // Re-fetch habits safely without breaking local state immediately
+      fetchHabits();
+    };
+
+    socket.on("habit_updated", handleLiveUpdate);
+    socket.on("habit_deleted", handleLiveUpdate);
+    socket.on("habit_added", handleLiveUpdate);
+
+    return () => {
+      socket.off("habit_updated", handleLiveUpdate);
+      socket.off("habit_deleted", handleLiveUpdate);
+      socket.off("habit_added", handleLiveUpdate);
+    };
+  }, [socket]);
+
+  return { habits, completedToday, streakCount, longestStreak, loading, error, refetch: fetchHabits, deleteHabit, completeHabit, addHabit };
 };
 
 export default useHabits;

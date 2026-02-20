@@ -33,7 +33,7 @@ function Navbar() {
     ...(isAuthenticated ? [
       { to: '/dashboard', label: 'Dashboard' },
       { to: '/circles', label: 'Circles' },
-
+      { to: '/map', label: 'Map' },
     ] : []),
   ];
 
@@ -45,9 +45,8 @@ function Navbar() {
 
   return (
     <motion.header
-      className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
-        scrolled ? 'bg-white shadow-md py-2' : 'bg-gradient-to-r from-primary-50/80 to-neutral-50/80 backdrop-blur-md py-3'
-      }`}
+      className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${scrolled ? 'bg-white shadow-md py-2' : 'bg-gradient-to-r from-primary-50/80 to-neutral-50/80 backdrop-blur-md py-3'
+        }`}
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.5 }}
@@ -65,9 +64,8 @@ function Navbar() {
               <Link
                 key={to}
                 to={to}
-                className={`text-neutral-700 hover:text-primary-600 font-medium transition-colors ${
-                  location.pathname === to ? 'text-primary-600 font-semibold' : ''
-                }`}
+                className={`text-neutral-700 hover:text-primary-600 font-medium transition-colors ${location.pathname === to ? 'text-primary-600 font-semibold' : ''
+                  }`}
                 aria-current={location.pathname === to ? 'page' : undefined}
               >
                 {label}
@@ -124,7 +122,7 @@ function Navbar() {
                   Login
                 </Link>
                 <Link
-                  to="/register"
+                  to="/signup"
                   className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium"
                 >
                   Get Started
@@ -156,9 +154,8 @@ function Navbar() {
                   <Link
                     key={to}
                     to={to}
-                    className={`px-4 py-2 text-neutral-700 hover:bg-primary-50 hover:text-primary-600 rounded-lg transition-colors ${
-                      location.pathname === to ? 'bg-primary-50 text-primary-600' : ''
-                    }`}
+                    className={`px-4 py-2 text-neutral-700 hover:bg-primary-50 hover:text-primary-600 rounded-lg transition-colors ${location.pathname === to ? 'bg-primary-50 text-primary-600' : ''
+                      }`}
                     onClick={() => setIsMenuOpen(false)}
                     aria-current={location.pathname === to ? 'page' : undefined}
                   >
@@ -206,7 +203,7 @@ function Navbar() {
                       Login
                     </Link>
                     <Link
-                      to="/register"
+                      to="/signup"
                       className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 flex justify-center mx-4"
                       onClick={() => setIsMenuOpen(false)}
                     >

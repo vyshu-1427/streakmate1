@@ -52,10 +52,23 @@ const habitSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  startTime: {
+    type: String, // Format: HH:mm
+    default: '',
+  },
+  endTime: {
+    type: String, // Format: HH:mm
+    default: '',
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'completed', 'missed'],
+    default: 'pending',
+  },
   createdAt: {
     type: Date,
     default: Date.now,
   },
-});
+}, { timestamps: true });
 
 export default mongoose.model("Habit", habitSchema);

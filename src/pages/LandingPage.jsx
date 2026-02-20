@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { Clock, Trophy, Users, Sparkles, Flame, Star, Target, BarChart, Users2, Quote } from 'lucide-react';
@@ -7,6 +8,13 @@ import Footer from '../components/Footer';
 
 function LandingPage() {
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
   const { scrollY } = useScroll();
   const parallaxY = useTransform(scrollY, [0, 500], [0, -100]);
 
@@ -77,7 +85,7 @@ function LandingPage() {
       {/* Hero Section */}
       <section className="relative pt-24 pb-32 md:pt-32 md:pb-40 flex-1 flex items-center z-10">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
+            <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-12">
             <motion.div
               className="max-w-3xl text-center lg:text-left"
               initial={{ opacity: 0, y: 50 }}
@@ -93,12 +101,11 @@ function LandingPage() {
                 <Sparkles className="inline-block w-8 h-8 text-yellow-400 mr-2" />
                 <span className="text-lg font-semibold text-yellow-300">Welcome to the future of habit tracking</span>
               </motion.div>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-display font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-pink-400 to-purple-400 mb-8 leading-tight">
-                Build Habits, <br />
-                <span className="text-white drop-shadow-lg">Together</span>
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-display font-extrabold text-white mb-8 leading-tight drop-shadow-lg">
+                Build Habits Together
               </h1>
               <p className="text-lg sm:text-xl text-gray-200 mb-10 max-w-2xl mx-auto lg:mx-0 drop-shadow-md leading-relaxed">
-                StreakMates empowers you to track habits, build streaks, and grow with accountability circles. Start your transformation today and unlock your full potential.
+                StreakMates empowers circles to build habits, track streaks, and grow with accountability. Start your transformation today and unlock your full potential.
               </p>
               <div className="flex flex-col sm:flex-row gap-6 justify-center lg:justify-start">
                 <motion.div
@@ -144,7 +151,7 @@ function LandingPage() {
                   loading="lazy"
                 />
                 <div className="mt-6 text-center">
-                  <p className="text-sm text-gray-200 font-medium">Your habit dashboard</p>
+                  <p className="text-sm text-gray-200 font-medium">Your dashboard</p>
                   <div className="flex items-center justify-center gap-3 mt-3">
                     <Flame size={20} className="text-yellow-400" />
                     <span className="text-lg font-bold text-white">10-day streak</span>
