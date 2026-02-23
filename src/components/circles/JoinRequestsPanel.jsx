@@ -18,7 +18,7 @@ const JoinRequestsPanel = ({ circleId, onUpdate }) => {
             const res = await axios.get(`${API_URL}/api/circles/${circleId}/requests`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setRequests(res.data.requests);
+            setRequests(res.data.requests || []);
         } catch (error) {
             console.error('Error fetching join requests:', error);
         } finally {
@@ -33,26 +33,30 @@ const JoinRequestsPanel = ({ circleId, onUpdate }) => {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            // Remove handled request from list
-            setRequests(requests.filter(r => r._id !== requestId));
+            // Remove handled request from list immediately
+            setRequests(prev => prev.filter(r => r._id !== requestId));
 
-            if (action === 'approve') onUpdate(); // Refresh circle details (e.g. member count)
+            if (action === 'approve') onUpdate(); // Refresh circle details on approval
         } catch (error) {
             console.error(`Error trying to ${action} request:`, error);
         }
     };
 
-    if (loading) return <div className="text-center py-6 text-neutral-500">Loading requests...</div>;
+    if (loading) {
+        return <div className="text-center py-6 text-neutral-500">Loading requests...</div>;
+    }
 
-    if (requests.length === 0) return (
-        <div className="bg-white rounded-xl shadow-sm border border-neutral-100 p-8 text-center">
-            <div className="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Check size={20} className="text-neutral-400" />
+    if (requests.length === 0) {
+        return (
+            <div className="bg-white rounded-xl shadow-sm border border-neutral-100 p-8 text-center">
+                <div className="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Check size={20} className="text-neutral-400" />
+                </div>
+                <h3 className="text-neutral-900 font-medium">No pending requests</h3>
+                <p className="text-sm text-neutral-500 mt-1">You're all caught up!</p>
             </div>
-            <h3 className="text-neutral-900 font-medium">No pending requests</h3>
-            <p className="text-sm text-neutral-500 mt-1">You're all caught up!</p>
-        </div>
-    );
+        );
+    }
 
     return (
         <div className="bg-white rounded-xl shadow-sm border border-neutral-100 overflow-hidden">
@@ -61,14 +65,17 @@ const JoinRequestsPanel = ({ circleId, onUpdate }) => {
             </div>
             <div className="divide-y divide-neutral-100">
                 {requests.map(request => (
-                    <div key={request._id} className="p-4 flex items-center justify-between hover:bg-neutral-50/50 transition-colors">
+                    <div
+                        key={request._id}
+                        className="p-4 flex items-center justify-between hover:bg-neutral-50/50 transition-colors"
+                    >
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-primary-100 text-primary-700 font-bold flex items-center justify-center">
-                                {request.userId?.name?.charAt(0) || '?'}
+                                {request.userId?.name?.charAt(0).toUpperCase() || '?'}
                             </div>
                             <div>
                                 <p className="font-medium text-neutral-900">{request.userId?.name || 'Unknown User'}</p>
-                                <p className="text-sm text-neutral-500">{request.userId?.email}</p>
+                                <p className="text-sm text-neutral-500">{request.userId?.email || ''}</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">

@@ -42,7 +42,7 @@ const CircleCard = ({ circle, onJoin, onOpen, isMember }) => {
                     ) : (
                         <button
                             onClick={(e) => {
-                                e.stopPropagation();
+                                e.stopPropagation(); // Prevent parent onClick
                                 onJoin(circle);
                             }}
                             className="w-full py-2 px-4 rounded-lg bg-primary-600 text-white hover:bg-primary-700 text-sm font-medium transition-colors"
@@ -84,8 +84,7 @@ const CircleList = ({ circles, activeTab, onJoin, onOpen, currentUserId }) => {
             transition={{ duration: 0.5 }}
         >
             {circles.map((circle) => {
-                // Members might be populated objects or just IDs, safeguard check
-                const isMember = circle.members?.some((m) => {
+                const isMember = Array.isArray(circle.members) && circle.members.some((m) => {
                     if (typeof m === 'object' && m !== null) return m._id === currentUserId;
                     return m === currentUserId;
                 });

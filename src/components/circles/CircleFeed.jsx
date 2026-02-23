@@ -16,14 +16,21 @@ const CircleFeed = ({ circleId, currentUserId }) => {
     }, [circleId]);
 
     const fetchPosts = async () => {
+        setLoading(true);
         try {
             const token = localStorage.getItem('token');
             const res = await axios.get(`${API_URL}/api/circles/${circleId}/posts`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setPosts(res.data.posts);
+
+            if (res.data.success && Array.isArray(res.data.posts)) {
+                setPosts(res.data.posts);
+            } else {
+                setPosts([]);
+            }
         } catch (error) {
             console.error('Error fetching posts:', error);
+            setPosts([]);
         } finally {
             setLoading(false);
         }
@@ -42,9 +49,10 @@ const CircleFeed = ({ circleId, currentUserId }) => {
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            // prepend new post
-            setPosts([res.data.post, ...posts]);
-            setNewPostContent('');
+            if (res.data.success && res.data.post) {
+                setPosts(prev => [res.data.post, ...prev]);
+                setNewPostContent('');
+            }
         } catch (error) {
             console.error('Error creating post:', error);
         } finally {
@@ -52,7 +60,9 @@ const CircleFeed = ({ circleId, currentUserId }) => {
         }
     };
 
-    if (loading) return <div className="text-center py-8 text-neutral-500">Loading feed...</div>;
+    if (loading) {
+        return <div className="text-center py-8 text-neutral-500">Loading feed...</div>;
+    }
 
     return (
         <div className="flex flex-col gap-6">

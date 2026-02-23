@@ -33,10 +33,10 @@ const DateButton = ({ date, isToday, isSelected, onClick }) => (
   <motion.button
     onClick={onClick}
     className={`flex flex-col items-center justify-center p-4 rounded-2xl min-w-[4rem] transition-all font-semibold border-2 backdrop-blur-sm ${isSelected
-        ? 'bg-gradient-to-br from-purple-600 to-pink-600 text-white border-purple-600 shadow-xl'
-        : isToday
-          ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-white border-yellow-400 shadow-lg'
-          : 'bg-white/80 text-neutral-700 border-neutral-200 hover:bg-white hover:border-purple-300 hover:shadow-lg'
+      ? 'bg-gradient-to-br from-purple-600 to-pink-600 text-white border-purple-600 shadow-xl'
+      : isToday
+        ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-white border-yellow-400 shadow-lg'
+        : 'bg-white/80 text-neutral-700 border-neutral-200 hover:bg-white hover:border-purple-300 hover:shadow-lg'
       }`}
     whileHover={{ scale: 1.08, y: -2 }}
     whileTap={{ scale: 0.95 }}
@@ -191,7 +191,8 @@ function Dashboard() {
         habitName: data.entry ? data.entry.habitName || habitName : habitName,
         userExplanation: data.entry ? data.entry.userExplanation : reason,
         aiReply: data.aiReply || (data.entry && data.entry.aiReply) || '',
-        date: data.entry ? data.entry.date : new Date().toISOString()
+        date: data.entry ? data.entry.date : new Date().toISOString(),
+        showRestoreButton: data.showRestoreButton
       };
 
       setLatestMotivation(motivationData);

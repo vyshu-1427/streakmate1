@@ -7,6 +7,7 @@ function MissedStreakModal({ open, onClose, habitId, habitName, onMotivation, on
   const [error, setError] = useState('');
   const [showMotivation, setShowMotivation] = useState(false);
   const [motivation, setMotivation] = useState('');
+  const [showRestoreButton, setShowRestoreButton] = useState(true);
   const [restoring, setRestoring] = useState(false);
   const [success, setSuccess] = useState('');
 
@@ -18,6 +19,9 @@ function MissedStreakModal({ open, onClose, habitId, habitName, onMotivation, on
       const result = await onMotivation(habitId, habitName, explanation);
       if (result && result.aiReply) {
         setMotivation(result.aiReply);
+        if (result.showRestoreButton !== undefined) {
+          setShowRestoreButton(result.showRestoreButton);
+        }
         setShowMotivation(true);
         setExplanation('');
       }
@@ -46,6 +50,7 @@ function MissedStreakModal({ open, onClose, habitId, habitName, onMotivation, on
   const handleClose = () => {
     setShowMotivation(false);
     setMotivation('');
+    setShowRestoreButton(true);
     setExplanation('');
     setError('');
     setSuccess('');
@@ -104,22 +109,24 @@ function MissedStreakModal({ open, onClose, habitId, habitName, onMotivation, on
 
             {/* Buttons at bottom */}
             <div className="flex gap-2 justify-end mt-4 pt-4 border-t border-gray-200">
-              <button
-                type="button"
-                className={`px-4 py-2 rounded font-medium transition-all duration-200 ${restoring || restoreChances === 0
+              {showRestoreButton && (
+                <button
+                  type="button"
+                  className={`px-4 py-2 rounded font-medium transition-all duration-200 ${restoring || restoreChances === 0
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
-                  }`}
-                onClick={handleRestore}
-                disabled={restoring || restoreChances === 0}
-              >
-                {restoring
-                  ? '⏳ Restoring...'
-                  : restoreChances > 0
-                    ? '✅ Restore Streak'
-                    : '❌ No Chances Left'
-                }
-              </button>
+                    }`}
+                  onClick={handleRestore}
+                  disabled={restoring || restoreChances === 0}
+                >
+                  {restoring
+                    ? '⏳ Restoring...'
+                    : restoreChances > 0
+                      ? '✅ Restore Streak'
+                      : '❌ No Chances Left'
+                  }
+                </button>
+              )}
               <button
                 type="button"
                 className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200"

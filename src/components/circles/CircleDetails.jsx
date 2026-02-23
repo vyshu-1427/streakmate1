@@ -1,41 +1,121 @@
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Users, Shield, MessageSquare, Plus, Check } from 'lucide-react';
-import axios from 'axios';
-import CircleFeed from './CircleFeed';
-import JoinRequestsPanel from './JoinRequestsPanel';
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, Users, Shield } from "lucide-react";
+import axios from "axios";
+import { toast } from "react-hot-toast";
+import CircleFeed from "./CircleFeed";
+import JoinRequestsPanel from "./JoinRequestsPanel";
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5003';
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5003";
 
 const CircleDetails = ({ circleId, onBack, currentUserId }) => {
     const [circle, setCircle] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('feed'); // 'feed', 'members', 'requests'
+    const [activeTab, setActiveTab] = useState("feed");
+    const [userLocation, setUserLocation] = useState(null);
 
-    useEffect(() => {
-        fetchCircleDetails();
-    }, [circleId]);
+    // ================= GET USER LOCATION SAFELY =================
+    const fetchUserLocation = () => {
+        if (!("geolocation" in navigator)) return; // browser doesn't support
 
-    const fetchCircleDetails = async () => {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setUserLocation({
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                });
+            },
+            (error) => {
+                console.warn("Geolocation error:", error.message);
+                toast.error(
+                    "Location access blocked. Nearby circle features may be limited."
+                );
+            }
+        );
+    };
+
+    // ================= FETCH CIRCLE =================
+    const fetchCircleDetails = useCallback(async () => {
+        if (!circleId) return;
+
         try {
-            const token = localStorage.getItem('token');
+            setLoading(true);
+            const token = localStorage.getItem("token");
+
             const res = await axios.get(`${API_URL}/api/circles/${circleId}`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
+                params: userLocation
+                    ? { lat: userLocation.lat, lng: userLocation.lng }
+                    : {},
             });
-            setCircle(res.data.circle);
+
+            setCircle(res.data?.circle || null);
         } catch (error) {
-            console.error('Error fetching circle details:', error);
+            console.error("Fetch circle error:", error);
+            toast.error(error.response?.data?.message || "Failed to load circle");
         } finally {
             setLoading(false);
         }
+    }, [circleId, userLocation]);
+
+    useEffect(() => {
+        fetchUserLocation();
+    }, []);
+
+    useEffect(() => {
+        fetchCircleDetails();
+    }, [fetchCircleDetails]);
+
+    // ================= DELETE CIRCLE =================
+    const handleDeleteCircle = async () => {
+        if (!window.confirm("Delete this circle permanently?")) return;
+
+        try {
+            const token = localStorage.getItem("token");
+            const res = await axios.delete(`${API_URL}/api/circles/${circleId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            toast.success(res.data?.message || "Circle deleted");
+            onBack();
+        } catch (error) {
+            console.error("Delete error:", error);
+            toast.error(error.response?.data?.message || "Failed to delete circle");
+        }
     };
 
-    if (loading) return <div className="text-center py-10">Loading circle details...</div>;
-    if (!circle) return <div className="text-center py-10">Circle not found</div>;
+    // ================= EXIT CIRCLE =================
+    const handleExitCircle = async () => {
+        if (!window.confirm("Are you sure you want to exit this circle?")) return;
 
-    const isAdmin = circle.admins.some(a => a._id === currentUserId);
-    const isMember = circle.members.some(m => m._id === currentUserId);
+        try {
+            const token = localStorage.getItem("token");
+            const res = await axios.post(
+                `${API_URL}/api/circles/${circleId}/exit`,
+                {},
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
 
+            toast.success(res.data?.message || "Exited circle");
+            onBack();
+        } catch (error) {
+            console.error("Exit error:", error);
+            toast.error(error.response?.data?.message || "Failed to exit circle");
+        }
+    };
+
+    // ================= STATES =================
+    if (loading)
+        return <div className="text-center py-10">Loading circle details...</div>;
+
+    if (!circle)
+        return <div className="text-center py-10">Circle not found</div>;
+
+    const isAdmin = circle.admins?.some((a) => a?._id === currentUserId) || false;
+    const isMember =
+        circle.members?.some((m) => m?._id === currentUserId) || false;
+
+    // ================= UI =================
     return (
         <motion.div
             initial={{ opacity: 0, x: 20 }}
@@ -43,6 +123,7 @@ const CircleDetails = ({ circleId, onBack, currentUserId }) => {
             exit={{ opacity: 0, x: -20 }}
             className="flex flex-col h-full"
         >
+            {/* BACK BUTTON */}
             <button
                 onClick={onBack}
                 className="flex items-center text-neutral-500 hover:text-neutral-800 mb-6 w-fit transition-colors"
@@ -50,89 +131,116 @@ const CircleDetails = ({ circleId, onBack, currentUserId }) => {
                 <ArrowLeft size={16} className="mr-2" /> Back to Circles
             </button>
 
-            <div className="bg-white rounded-2xl shadow-soft p-6 md:p-8 mb-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-primary-50 rounded-full blur-3xl -mr-10 -mt-20 opacity-50 pointer-events-none"></div>
-
-                <div className="relative z-10 flex flex-col md:flex-row md:items-start justify-between gap-4">
+            {/* HEADER */}
+            <div className="bg-white rounded-2xl shadow p-6 mb-6">
+                <div className="flex flex-col md:flex-row justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-3 mb-2">
-                            <h1 className="text-2xl md:text-3xl font-display font-bold text-neutral-900">{circle.name}</h1>
-                            <span className="px-3 py-1 bg-primary-50 text-primary-700 text-xs font-semibold rounded-full list-none">
-                                {circle.category}
-                            </span>
-                            {circle.visibility === 'private' && (
-                                <span className="px-3 py-1 bg-neutral-100 text-neutral-600 text-xs font-medium rounded-full list-none flex items-center">
+                            <h1 className="text-2xl font-bold">{circle.name}</h1>
+                            {circle.visibility === "private" && (
+                                <span className="px-3 py-1 bg-neutral-100 text-xs rounded-full">
                                     Private
                                 </span>
                             )}
                         </div>
-                        <p className="text-neutral-600 max-w-2xl mb-4">{circle.description}</p>
+
+                        <p className="text-neutral-600 mb-3">{circle.description}</p>
+
                         <div className="flex items-center gap-4 text-sm text-neutral-500">
-                            <div className="flex items-center"><Users size={16} className="mr-1" /> {circle.members.length} Members</div>
-                            <div className="flex items-center text-primary-600"><Shield size={16} className="mr-1" /> Created by {circle.createdBy?.name || 'Unknown'}</div>
+                            <div className="flex items-center">
+                                <Users size={16} className="mr-1" /> {circle.members?.length || 0} Members
+                            </div>
+                            <div className="flex items-center text-primary-600">
+                                <Shield size={16} className="mr-1" /> Created by {circle.createdBy?.name || "Unknown"}
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="flex gap-6 border-b border-neutral-200 mb-6">
-                <button
-                    className={`pb-3 px-2 font-medium text-sm transition-colors relative ${activeTab === 'feed' ? 'text-primary-600' : 'text-neutral-500 hover:text-neutral-700'}`}
-                    onClick={() => setActiveTab('feed')}
-                >
-                    Feed
-                    {activeTab === 'feed' && <motion.div layoutId="DetailsTabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600" />}
-                </button>
-                <button
-                    className={`pb-3 px-2 font-medium text-sm transition-colors relative ${activeTab === 'members' ? 'text-primary-600' : 'text-neutral-500 hover:text-neutral-700'}`}
-                    onClick={() => setActiveTab('members')}
-                >
-                    Members
-                    {activeTab === 'members' && <motion.div layoutId="DetailsTabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600" />}
-                </button>
+            {/* TABS */}
+            <div className="flex gap-6 border-b mb-6">
+                {["feed", "members", "settings"].map((tab) => (
+                    <button
+                        key={tab}
+                        className={`pb-3 text-sm font-medium ${activeTab === tab ? "text-primary-600" : "text-neutral-500"
+                            }`}
+                        onClick={() => setActiveTab(tab)}
+                    >
+                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </button>
+                ))}
+
                 {isAdmin && (
                     <button
-                        className={`pb-3 px-2 font-medium text-sm transition-colors relative ${activeTab === 'requests' ? 'text-primary-600' : 'text-neutral-500 hover:text-neutral-700'}`}
-                        onClick={() => setActiveTab('requests')}
+                        className={`pb-3 text-sm font-medium ${activeTab === "requests" ? "text-primary-600" : "text-neutral-500"
+                            }`}
+                        onClick={() => setActiveTab("requests")}
                     >
                         Join Requests
-                        {activeTab === 'requests' && <motion.div layoutId="DetailsTabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600" />}
                     </button>
                 )}
             </div>
 
-            <div className="flex-1">
+            {/* CONTENT */}
+            <div className="flex-1 overflow-auto">
                 <AnimatePresence mode="wait">
-                    {activeTab === 'feed' && (
-                        <motion.div key="feed" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                            {isMember ? <CircleFeed circleId={circleId} currentUserId={currentUserId} /> : <div className="text-center py-10 text-neutral-500">You must be a member to see the feed.</div>}
+                    {activeTab === "feed" && (
+                        <motion.div key="feed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                            {isMember ? (
+                                <CircleFeed circleId={circleId} currentUserId={currentUserId} />
+                            ) : (
+                                <div className="text-center py-10 text-neutral-500">
+                                    You must be a member to see the feed.
+                                </div>
+                            )}
                         </motion.div>
                     )}
 
-                    {activeTab === 'members' && (
-                        <motion.div key="members" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {circle.members.map(member => {
-                                const isMemberAdmin = circle.admins.some(a => a._id === member._id);
+                    {activeTab === "members" && (
+                        <motion.div
+                            key="members"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="grid md:grid-cols-2 lg:grid-cols-3 gap-4"
+                        >
+                            {circle.members?.map((member) => {
+                                const memberIsAdmin =
+                                    circle.admins?.some((a) => a?._id === member?._id) || false;
                                 return (
-                                    <div key={member._id} className="flex items-center p-4 bg-white rounded-xl shadow-sm border border-neutral-100">
-                                        <div className="w-10 h-10 bg-primary-100 text-primary-700 font-bold rounded-full flex items-center justify-center mr-3 uppercase">
-                                            {member.name.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <p className="font-medium text-neutral-900 flex items-center gap-2">
-                                                {member.name}
-                                                {isMemberAdmin && <Shield size={14} className="text-amber-500" title="Admin" />}
-                                            </p>
-                                        </div>
+                                    <div key={member._id} className="p-4 bg-white rounded-lg shadow">
+                                        <p className="font-medium flex items-center gap-2">
+                                            {member.name}
+                                            {memberIsAdmin && <Shield size={14} className="text-amber-500" />}
+                                        </p>
                                     </div>
                                 );
                             })}
                         </motion.div>
                     )}
 
-                    {activeTab === 'requests' && isAdmin && (
-                        <motion.div key="requests" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                    {activeTab === "requests" && isAdmin && (
+                        <motion.div key="requests" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                             <JoinRequestsPanel circleId={circleId} onUpdate={fetchCircleDetails} />
+                        </motion.div>
+                    )}
+
+                    {activeTab === "settings" && (
+                        <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                            <div className="bg-white p-6 rounded-lg shadow">
+                                {isAdmin ? (
+                                    <button onClick={handleDeleteCircle} className="px-4 py-2 bg-red-600 text-white rounded">
+                                        Delete Circle
+                                    </button>
+                                ) : isMember ? (
+                                    <button onClick={handleExitCircle} className="px-4 py-2 bg-orange-500 text-white rounded">
+                                        Exit Circle
+                                    </button>
+                                ) : (
+                                    <p>You must be a member.</p>
+                                )}
+                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>

@@ -40,7 +40,7 @@ const ChatBot = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/chatbot`, {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/chatbot/message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -57,7 +57,7 @@ const ChatBot = () => {
           text: data.reply,
           sender: 'bot',
           timestamp: new Date(),
-          emotion: data.emotion
+          emotion: data.tone
         };
         setMessages(prev => [...prev, botMessage]);
       } else {
@@ -136,18 +136,21 @@ const ChatBot = () => {
                   className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[80%] p-3 rounded-2xl text-sm ${
-                      message.sender === 'user'
+                    className={`max-w-[80%] p-3 rounded-2xl text-sm ${message.sender === 'user'
                         ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}
+                        : message.emotion === 'flirty'
+                          ? 'bg-gradient-to-r from-pink-400 to-red-400 text-white'
+                          : message.emotion === 'emotional'
+                            ? 'bg-gradient-to-r from-teal-400 to-emerald-500 text-white'
+                            : 'bg-gray-100 text-gray-800'
+                      }`}
                   >
                     {message.text}
-                    {/* {message.emotion && (
-                      <div className="text-xs opacity-70 mt-1">
-                        Feeling: {message.emotion}
+                    {message.emotion && message.emotion !== 'neutral' && (
+                      <div className="text-[10px] opacity-70 mt-1 uppercase tracking-wider font-bold">
+                        {message.emotion}
                       </div>
-                    )} */}
+                    )}
                   </div>
                 </motion.div>
               ))}

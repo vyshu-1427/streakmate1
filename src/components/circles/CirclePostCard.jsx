@@ -10,8 +10,7 @@ const CirclePostCard = ({ post, currentUserId, onPostUpdated }) => {
     const [newComment, setNewComment] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
-    // Safeguard: Check if likes contains objects or strings/ObjectIds
-    const isLiked = post.likes.some(like => {
+    const isLiked = post.likes?.some(like => {
         if (typeof like === 'object' && like !== null) return like._id === currentUserId;
         return like === currentUserId;
     });
@@ -24,7 +23,7 @@ const CirclePostCard = ({ post, currentUserId, onPostUpdated }) => {
                 {},
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            onPostUpdated(); // Refresh post to get new like count/status
+            onPostUpdated();
         } catch (error) {
             console.error('Error toggling like:', error);
         }
@@ -43,7 +42,7 @@ const CirclePostCard = ({ post, currentUserId, onPostUpdated }) => {
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             setNewComment('');
-            onPostUpdated(); // Refresh post to get new comments
+            onPostUpdated();
         } catch (error) {
             console.error('Error commenting:', error);
         } finally {
@@ -56,6 +55,7 @@ const CirclePostCard = ({ post, currentUserId, onPostUpdated }) => {
 
     return (
         <div className="bg-white rounded-xl shadow-sm border border-neutral-100 p-4 md:p-5">
+            {/* Post Header */}
             <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-bold shadow-sm">
                     {authorInitial}
@@ -68,32 +68,35 @@ const CirclePostCard = ({ post, currentUserId, onPostUpdated }) => {
                 </div>
             </div>
 
+            {/* Post Content */}
             <div className="mb-4 text-neutral-800 whitespace-pre-wrap text-sm md:text-base">
                 {post.content}
             </div>
 
+            {/* Post Actions */}
             <div className="flex items-center gap-6 pt-3 border-t border-neutral-100 text-neutral-500">
                 <button
                     onClick={handleToggleLike}
                     className={`flex items-center gap-2 hover:text-rose-500 transition-colors ${isLiked ? 'text-rose-500' : ''}`}
                 >
                     <Heart size={18} fill={isLiked ? "currentColor" : "none"} />
-                    <span className="text-sm font-medium">{post.likes.length}</span>
+                    <span className="text-sm font-medium">{post.likes?.length || 0}</span>
                 </button>
                 <button
                     onClick={() => setShowComments(!showComments)}
                     className="flex items-center gap-2 hover:text-primary-600 transition-colors"
                 >
                     <MessageCircle size={18} />
-                    <span className="text-sm font-medium">{post.comments.length}</span>
+                    <span className="text-sm font-medium">{post.comments?.length || 0}</span>
                 </button>
             </div>
 
+            {/* Comments Section */}
             {showComments && (
                 <div className="mt-4 pt-4 border-t border-neutral-100 flex flex-col gap-3">
                     {/* Comments List */}
                     <div className="flex flex-col gap-3 max-h-60 overflow-y-auto pr-2">
-                        {post.comments.length === 0 ? (
+                        {post.comments?.length === 0 ? (
                             <p className="text-xs text-center text-neutral-400">No comments yet.</p>
                         ) : (
                             post.comments.map(comment => (
@@ -101,7 +104,7 @@ const CirclePostCard = ({ post, currentUserId, onPostUpdated }) => {
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="font-medium text-xs text-neutral-900">{comment.userId?.name || 'Unknown'}</span>
                                         <span className="text-[10px] text-neutral-400">
-                                            {formatDistanceToNow(new Date(comment.timestamp), { addSuffix: true })}
+                                            {formatDistanceToNow(new Date(comment.createdAt || comment.timestamp), { addSuffix: true })}
                                         </span>
                                     </div>
                                     <p className="text-sm text-neutral-700">{comment.content}</p>
