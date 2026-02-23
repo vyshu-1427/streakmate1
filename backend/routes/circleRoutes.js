@@ -1,6 +1,5 @@
 import express from "express";
 import authMiddleware from "../middleware/authMiddleware.js";
-import { checkStreakThreshold } from "../middleware/streakCheck.js";
 import {
     createCircle,
     getCircles,
@@ -13,6 +12,8 @@ import {
     getCirclePosts,
     toggleLikePost,
     commentPost,
+    deleteCircle,
+    exitCircle,
 } from "../controllers/circleController.js";
 
 const router = express.Router();
@@ -21,34 +22,22 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // --- Circles ---
-// Create a circle (requires streak >= threshold)
-router.post("/", checkStreakThreshold, createCircle);
-
-// Get circles (public/nearby)
-router.get("/", getCircles);
-
-// Get specific circle details
-router.get("/:id", getCircleDetails);
-
-// Request/Join a circle
-router.post("/:id/join", joinCircle);
+router.post("/", createCircle); // Create a circle (no streak requirement)
+router.get("/", getCircles); // Get circles (public/nearby)
+router.get("/:id", getCircleDetails); // Get specific circle details
+router.post("/:id/join", joinCircle); // Request/Join a circle
+router.post("/:id/exit", exitCircle); // Exit a circle
+router.delete("/:id", deleteCircle); // Delete a circle
 
 // --- Admin Request Management ---
-// Get pending requests for a circle
-router.get("/:id/requests", getPendingRequests);
-// Approve a request
-router.post("/requests/:id/approve", approveJoinRequest);
-// Reject a request
-router.post("/requests/:id/reject", rejectJoinRequest);
+router.get("/:id/requests", getPendingRequests); // Get pending requests for a circle
+router.post("/requests/:id/approve", approveJoinRequest); // Approve a request
+router.post("/requests/:id/reject", rejectJoinRequest); // Reject a request
 
 // --- Circle Feed (Posts, Likes, Comments) ---
-// Create a post in a circle
-router.post("/:id/post", createPost);
-// Get posts for a circle
-router.get("/:id/posts", getCirclePosts);
-// Like a post
-router.post("/posts/:postId/like", toggleLikePost);
-// Comment on a post
-router.post("/posts/:postId/comment", commentPost);
+router.post("/:id/post", createPost); // Create a post in a circle
+router.get("/:id/posts", getCirclePosts); // Get posts for a circle
+router.post("/posts/:postId/like", toggleLikePost); // Like a post
+router.post("/posts/:postId/comment", commentPost); // Comment on a post
 
 export default router;

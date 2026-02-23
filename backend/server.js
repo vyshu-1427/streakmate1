@@ -1,136 +1,178 @@
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 dotenv.config();
-console.log("Gemini Key Loaded?:", !!process.env.GEMINI_API_KEY);
-import express from 'express';
-import cors from 'cors';
-import mongoose from 'mongoose';
-import http from 'http';
-import { Server } from 'socket.io';
-import authRoutes from './routes/authRoutes.js';
-import habitRoutes from './routes/habitRoutes.js';
-import motivationRoutes from './routes/motivationRoutes.js';
-import streakRestoreRoutes from './routes/streakRestoreRoutes.js';
-import chatbotRoutes from './routes/chatbotRoutes.js';
-import circleRoutes from './routes/circleRoutes.js';
-import mapRoutes from './routes/mapRoutes.js';
-import { startStreakMonitor } from './cron/streakMonitor.js';
+
+import express from "express";
+import cors from "cors";
+import mongoose from "mongoose";
+import http from "http";
+import { Server } from "socket.io";
+
+import authRoutes from "./routes/authRoutes.js";
+import habitRoutes from "./routes/habitRoutes.js";
+import motivationRoutes from "./routes/motivationRoutes.js";
+import streakRestoreRoutes from "./routes/streakRestoreRoutes.js";
+import chatbotRoutes from "./routes/chatbotRoutes.js";
+import circleRoutes from "./routes/circleRoutes.js";
+import mapRoutes from "./routes/mapRoutes.js";
+import { startStreakMonitor } from "./cron/streakMonitor.js";
 
 const app = express();
 const server = http.createServer(app);
 
-// Setup Socket.io
+/* =========================
+   ✅ CORS CONFIGURATION
+========================= */
+
+const allowedOrigins = [
+  "https://streakmate.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:5175",
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
+
+/* =========================
+   ✅ SOCKET.IO SETUP
+========================= */
+
 export const io = new Server(server, {
   cors: {
-    origin: ['https://streakmate.vercel.app', 'http://localhost:5173'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
-  }
+  },
 });
 
-io.on('connection', (socket) => {
+io.on("connection", (socket) => {
   console.log(`Socket Connected: ${socket.id}`);
 
-  socket.on('disconnect', () => {
+  socket.on("disconnect", () => {
     console.log(`Socket Disconnected: ${socket.id}`);
   });
 });
 
+/* =========================
+   ✅ MIDDLEWARE
+========================= */
 
-// Middleware
 app.use(express.json());
 
-// Simplified and more robust CORS configuration
-const allowedOrigins = ['https://streakmate.vercel.app', 'http://localhost:5173'];
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, Postman)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('The CORS policy for this site does not allow access from the specified Origin.'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  credentials: true,
-}));
+/* =========================
+   ✅ ROUTES
+========================= */
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/habits', habitRoutes);
-app.use('/api/motivation', motivationRoutes);
-app.use('/api/streak-restore', streakRestoreRoutes);
-app.use('/api/chatbot', chatbotRoutes);
-app.use('/api/circles', circleRoutes);
-app.use('/api/map', mapRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/habits", habitRoutes);
+app.use("/api/motivation", motivationRoutes);
+app.use("/api/streak-restore", streakRestoreRoutes);
+app.use("/api/chatbot", chatbotRoutes);
+app.use("/api/circles", circleRoutes);
+app.use("/api/map", mapRoutes);
 
-// Habit status checker - runs every minute
+/* =========================
+   ✅ HABIT AUTO STATUS CHECKER
+========================= */
+
 const checkHabitStatuses = async () => {
   try {
-    const Habit = (await import('./models/habit.js')).default;
+    const Habit = (await import("./models/habit.js")).default;
+
     const now = new Date();
     const currentTimeInMinutes = now.getHours() * 60 + now.getMinutes();
-    const todayStr = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const todayStr = now.toISOString().split("T")[0];
 
-    // Find all daily habits that are pending and not completed today
     const pendingDailyHabits = await Habit.find({
-      status: 'pending',
-      frequency: 'daily', // Only apply time-based miss to daily habits
-      $nor: [{ completedDates: todayStr }]
+      status: "pending",
+      frequency: "daily",
+      $nor: [{ completedDates: todayStr }],
     });
 
-    const habitsToUpdate = pendingDailyHabits.filter(habit => {
+    const habitsToUpdate = pendingDailyHabits.filter((habit) => {
       const timeToCompare = habit.timeTo || habit.endTime || habit.time;
       if (!timeToCompare) return false;
-      const [hour, minute] = timeToCompare.split(':').map(Number);
+
+      const [hour, minute] = timeToCompare.split(":").map(Number);
       if (isNaN(hour) || isNaN(minute)) return false;
+
       const habitTimeInMinutes = hour * 60 + minute;
       return currentTimeInMinutes > habitTimeInMinutes;
     });
 
-    if (habitsToUpdate.length > 0) {
-      console.log(`Updating ${habitsToUpdate.length} habits to missed status at ${now.toLocaleTimeString()}`);
+    for (const habit of habitsToUpdate) {
+      const currentHabit = await Habit.findById(habit._id);
 
-      for (const habit of habitsToUpdate) {
-        // Double-check that the habit still exists and is still pending
-        // This prevents issues with recently deleted habits
-        const currentHabit = await Habit.findById(habit._id);
-        if (currentHabit && currentHabit.status === 'pending') {
-          currentHabit.status = 'missed';
-          await currentHabit.save();
-          console.log(`Marked habit "${currentHabit.name}" as missed (time: ${currentHabit.timeFrom || currentHabit.startTime || currentHabit.time} - ${currentHabit.timeTo || currentHabit.endTime || 'N/A'}) - not completed today`);
-        }
+      if (currentHabit && currentHabit.status === "pending") {
+        currentHabit.status = "missed";
+        await currentHabit.save();
+        console.log(`Marked habit "${currentHabit.name}" as missed`);
       }
     }
   } catch (error) {
-    console.error('Error checking habit statuses:', error);
+    console.error("Error checking habit statuses:", error);
   }
 };
 
-// Health check route
-app.get('/', (req, res) => res.send('API is running'));
+/* =========================
+   ✅ HEALTH CHECK
+========================= */
+
+app.get("/", (req, res) => {
+  res.send("API is running");
+});
+
+/* =========================
+   ✅ START SERVER
+========================= */
 
 const startServer = async () => {
   try {
-    // Connect to MongoDB
     await mongoose.connect(process.env.MONGO_URI);
-    console.log('MongoDB Connected');
+    console.log("MongoDB Connected");
 
-    // Start server only after successful DB connection
     const PORT = process.env.PORT || 5003;
+
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
-      // Run the status checker immediately on startup
+
+      // Run immediately
       checkHabitStatuses();
-      // Then, run it every minute
+
+      // Run every minute
       setInterval(checkHabitStatuses, 60000);
 
-      // Start node-cron streak monitor
+      // Start cron monitor
       startStreakMonitor();
     });
+
+    // Graceful shutdown
+    process.on("SIGINT", () => {
+      console.log("SIGINT received. Shutting down...");
+      server.close(() => process.exit(0));
+    });
+    process.on("SIGTERM", () => {
+      console.log("SIGTERM received. Shutting down...");
+      server.close(() => process.exit(0));
+    });
+
   } catch (err) {
-    console.error('MongoDB Connection Failed:', err);
-    process.exit(1); // Exit process with failure
+    if (err.code === "EADDRINUSE") {
+      console.error(`Port ${process.env.PORT || 5003} is already in use!`);
+    } else {
+      console.error("MongoDB Connection Failed:", err);
+    }
+    process.exit(1);
   }
 };
 

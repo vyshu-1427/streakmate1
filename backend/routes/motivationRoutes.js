@@ -20,7 +20,7 @@ async function generateMotivation(reason, habit, user = {}) {
     }
 
     console.log("Attempting to generate motivation with Gemini...");
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const streak = habit && habit.streak ? habit.streak : 0;
     const longestStreak = habit && habit.longestStreak ? habit.longestStreak : 0;
@@ -44,7 +44,7 @@ async function generateMotivation(reason, habit, user = {}) {
 
     if (geminiReply) {
       console.log("Successfully generated motivation with Gemini.");
-      return geminiReply;
+      return { reply: geminiReply, valid: true }; // Extracting logic later
     }
 
     throw new Error("Gemini returned an empty response.");
@@ -52,10 +52,35 @@ async function generateMotivation(reason, habit, user = {}) {
     console.error(`AI Error: Gemini failed. ${aiError.message}`);
 
     if (aiError.message && aiError.message.includes("API key not valid")) {
-      return "AI Error: The Gemini API key is invalid or missing. Please check the server configuration.";
+      return { reply: "AI Error: The Gemini API key is invalid or missing. Please check the server configuration.", valid: false };
     }
 
-    return "I'm having a little trouble thinking of the right words. Just remember that every day is a new opportunity to succeed!";
+    return { reply: "I'm having a little trouble thinking of the right words. Just remember that every day is a new opportunity to succeed!", valid: true };
+  }
+}
+
+// Generate whether a reason is valid using Gemini AI
+async function validateReasonWithAI(reason) {
+  try {
+    if (!genAI) return true; // Default to true if AI is disabled
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const prompt = `Evaluate the following reason for missing a habit streak: "${reason}".
+    Is this a valid, understandable reason (e.g., sickness, emergency, genuine forgetfulness) OR is it a terrible, repeated excuse (e.g., "I was too lazy", "I just didn't want to")?
+    Respond ONLY with a JSON object: {"valid": true|false}`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().replace(/```json/g, "").replace(/```/g, "").trim();
+
+    try {
+      const parsed = JSON.parse(text);
+      return parsed.valid !== false;
+    } catch {
+      return true; // default to true on parse error
+    }
+  } catch (err) {
+    console.error("Failed to validate reason with AI", err);
+    return true;
   }
 }
 
@@ -76,11 +101,40 @@ const saveMotivation = async (req, res) => {
     if (existing) {
       // generate a fresh ai reply but do not save it
       const freshReply = await generateMotivation(userExplanation, habit, req.user || {});
-      return res.json({ success: true, entry: existing, aiReply: freshReply });
+      const isValid = await validateReasonWithAI(userExplanation);
+      const isErrorMessage = freshReply.reply && freshReply.reply.startsWith("AI Error:");
+      const showRestoreButton = !isErrorMessage && isValid;
+
+      return res.json({
+        success: true,
+        entry: existing,
+        aiReply: freshReply.reply,
+        showRestoreButton: showRestoreButton
+      });
     }
 
     // generate an AI reply (may call OpenAI or fallback templates)
-    const aiReply = await generateMotivation(userExplanation, habit, req.user || {});
+    const aiResponse = await generateMotivation(userExplanation, habit, req.user || {});
+    const isValid = await validateReasonWithAI(userExplanation);
+
+    // Check past history for repeated invalid reasons
+    const recentMisses = await MissedStreak.find({ user: req.user.id })
+      .sort({ date: -1 })
+      .limit(3);
+
+    let showRestoreButton = isValid;
+    if (!isValid) {
+      const invalidCount = recentMisses.filter(m => m.validReason === false).length;
+      if (invalidCount >= 2) {
+        showRestoreButton = false;
+      } else {
+        // If it's their first or second invalid excuse, still give them a pass but mark as invalid in DB
+        showRestoreButton = true;
+      }
+    }
+
+    const isErrorMessage = aiResponse.reply && aiResponse.reply.startsWith("AI Error:");
+    if (isErrorMessage) showRestoreButton = false;
 
     // Save only the user's reason to history
     const entry = new MissedStreak({
@@ -88,9 +142,10 @@ const saveMotivation = async (req, res) => {
       habitId,
       habitName: habit.name,
       userExplanation,
+      validReason: isValid
     });
     await entry.save();
-    res.json({ success: true, entry, aiReply });
+    res.json({ success: true, entry, aiReply: aiResponse.reply, showRestoreButton });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

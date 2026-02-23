@@ -6,8 +6,8 @@ const MissedStreakSchema = new mongoose.Schema({
   habitName: { type: String, required: true },
   date: { type: Date, default: Date.now },
   userExplanation: { type: String, required: true },
-  // aiReply is no longer persisted to history by default. Keep optional for backward compatibility.
   aiReply: { type: String },
+  validReason: { type: Boolean, default: true },
 });
 
 export default mongoose.model('MissedStreak', MissedStreakSchema);

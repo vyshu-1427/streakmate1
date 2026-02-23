@@ -1,3 +1,4 @@
+// backend/models/JoinRequest.js
 import mongoose from "mongoose";
 
 const joinRequestSchema = new mongoose.Schema({
@@ -22,7 +23,8 @@ const joinRequestSchema = new mongoose.Schema({
     },
 });
 
-// Prevent duplicate requests
+// Prevent duplicate join requests for the same user & circle
 joinRequestSchema.index({ circleId: 1, userId: 1 }, { unique: true });
 
-export default mongoose.model("JoinRequest", joinRequestSchema);
+// Prevent OverwriteModelError when using ES modules or hot reload
+export default mongoose.models.JoinRequest || mongoose.model("JoinRequest", joinRequestSchema);

@@ -1,3 +1,4 @@
+// backend/models/Habit.js
 import mongoose from "mongoose";
 
 const habitSchema = new mongoose.Schema({
@@ -17,7 +18,7 @@ const habitSchema = new mongoose.Schema({
   emoji: {
     type: String,
     required: true,
-    default: "🎯"
+    default: "🎯",
   },
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -71,4 +72,5 @@ const habitSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-export default mongoose.model("Habit", habitSchema);
+// ✅ Prevent OverwriteModelError when using nodemon or ES modules
+export default mongoose.models.Habit || mongoose.model("Habit", habitSchema);

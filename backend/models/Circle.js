@@ -1,5 +1,10 @@
+// backend/models/Circle.js
 import mongoose from "mongoose";
 
+/**
+ * Circle Schema represents a user-created group with members,
+ * admins, geolocation, and visibility settings.
+ */
 const circleSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -20,14 +25,18 @@ const circleSchema = new mongoose.Schema({
         ref: "User",
         required: true,
     },
-    members: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-    }],
-    admins: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-    }],
+    members: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        },
+    ],
+    admins: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        },
+    ],
     visibility: {
         type: String,
         enum: ["public", "private"],
@@ -37,24 +46,19 @@ const circleSchema = new mongoose.Schema({
         type: {
             type: String,
             enum: ["Point"],
-            required: false,
         },
         coordinates: {
             type: [Number], // [longitude, latitude]
-            required: false,
         },
     },
     radius: {
-        type: Number, // in kilometers or meters
+        type: Number, // radius in kilometers
         default: 10,
     },
-    createdAt: {
-        type: Date,
-        default: Date.now,
-    },
-});
+}, { timestamps: true });
 
-// Create a 2dsphere index for geospatial queries
+// 2dsphere index for geospatial queries
 circleSchema.index({ location: "2dsphere" });
 
-export default mongoose.model("Circle", circleSchema);
+// Prevent OverwriteModelError when using ES modules or nodemon hot reload
+export default mongoose.models.Circle || mongoose.model("Circle", circleSchema);

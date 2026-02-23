@@ -28,12 +28,20 @@ const userSchema = new mongoose.Schema({
       required: false,
     },
   },
+  circles: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Circle",
+    },
+  ], // track joined circles
   createdAt: {
     type: Date,
     default: Date.now,
   },
 });
 
+// Create 2dsphere index for geospatial queries
 userSchema.index({ location: "2dsphere" });
 
-export default mongoose.model("User", userSchema);
+// Prevent OverwriteModelError in ES modules
+export default mongoose.models.User || mongoose.model("User", userSchema);
